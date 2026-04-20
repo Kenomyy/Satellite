@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Satellite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Montserrat:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- SETUP SCREEN -->
+  <div id="setup-screen" class="setup-screen hidden">
+    <div class="setup-card">
+      <div class="setup-logo">SATELLITE</div>
+      <div class="setup-subtitle">Connect your vault</div>
+      <div class="setup-fields">
+        <div class="field-group">
+          <label class="field-label">GitHub Token</label>
+          <input type="password" id="setup-token" class="field-input" placeholder="ghp_xxxxxxxxxxxx">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Repository</label>
+          <input type="text" id="setup-repo" class="field-input" placeholder="username/vault-repo">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Branch</label>
+          <input type="text" id="setup-branch" class="field-input" placeholder="main">
+        </div>
+      </div>
+      <button id="setup-connect" class="btn-primary">CONNECT</button>
+      <div id="setup-error" class="setup-error hidden"></div>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="app" class="app hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="app-name">SATELLITE</span>
+        <div class="sidebar-actions">
+          <button class="icon-btn" id="btn-new-file" title="New file">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-new-folder" title="New folder">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4.5A1.5 1.5 0 013.5 3h3l1.5 1.5H12.5A1.5 1.5 0 0114 6v5.5A1.5 1.5 0 0112.5 13h-9A1.5 1.5 0 012 11.5v-7z"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-settings" title="Settings">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- SEARCH -->
+      <div class="search-wrapper">
+        <svg class="search-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="4"/><path d="M11 11l3 3"/></svg>
+        <input type="text" id="search-input" class="search-input" placeholder="Search...">
+      </div>
+
+      <!-- TABS -->
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab active" data-tab="files">FILES</button>
+        <button class="sidebar-tab" data-tab="tags">TAGS</button>
+        <button class="sidebar-tab" data-tab="graph">GRAPH</button>
+      </div>
+
+      <!-- FILES TAB -->
+      <div id="tab-files" class="tab-content active">
+        <div id="file-explorer" class="file-explorer"></div>
+      </div>
+
+      <!-- TAGS TAB -->
+      <div id="tab-tags" class="tab-content">
+        <div id="tags-panel" class="tags-panel"></div>
+      </div>
+
+      <!-- GRAPH TAB -->
+      <div id="tab-graph" class="tab-content">
+        <div id="graph-view" class="graph-view">
+          <canvas id="graph-canvas"></canvas>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main">
+
+      <!-- TOP BAR -->
+      <div class="topbar">
+        <div class="topbar-left">
+          <div id="breadcrumb" class="breadcrumb"></div>
+        </div>
+        <div class="topbar-right">
+          <div class="sync-status" id="sync-status">
+            <span class="sync-dot"></span>
+            <span id="sync-label" class="sync-label">—</span>
+          </div>
+          <button class="btn-mono" id="btn-pull">PULL</button>
+          <button class="btn-mono" id="btn-push">PUSH</button>
+          <button class="icon-btn" id="btn-preview-toggle" title="Toggle preview (Ctrl+E)">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- EDITOR AREA -->
+      <div class="editor-area" id="editor-area">
+
+        <!-- EMPTY STATE -->
+        <div id="empty-state" class="empty-state">
+          <div class="empty-logo">SATELLITE</div>
+          <div class="empty-hint">Select a file to start editing</div>
+          <div class="empty-shortcuts">
+            <span class="shortcut"><kbd>Ctrl</kbd><kbd>E</kbd> Preview</span>
+            <span class="shortcut"><kbd>Ctrl</kbd><kbd>K</kbd> Search</span>
+            <span class="shortcut"><kbd>Ctrl</kbd><kbd>N</kbd> New file</span>
+          </div>
+        </div>
+
+        <!-- EDITOR -->
+        <div id="editor-container" class="editor-container hidden">
+          <textarea id="editor" class="editor" spellcheck="false"></textarea>
+          <div id="preview" class="preview hidden"></div>
+        </div>
+
+        <!-- BACKLINKS -->
+        <div id="backlinks-panel" class="backlinks-panel hidden">
+          <div class="backlinks-title">BACKLINKS</div>
+          <div id="backlinks-list" class="backlinks-list"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- CONFLICT MODAL -->
+  <div id="conflict-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-title">CONFLICT DETECTED</div>
+      <div class="modal-body">This file has been modified remotely. Choose which version to keep.</div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="conflict-theirs">THEIR VERSION</button>
+        <button class="btn-primary" id="conflict-mine">MY VERSION</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTEXT MENU -->
+  <div id="context-menu" class="context-menu hidden">
+    <button class="context-item" data-action="rename">Rename</button>
+    <button class="context-item" data-action="delete">Delete</button>
+    <button class="context-item" data-action="new-file">New file here</button>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-title">SETTINGS</div>
+      <div class="field-group">
+        <label class="field-label">Accent Color</label>
+        <div class="color-picker-row">
+          <input type="color" id="accent-color-picker" value="#E8E8F0">
+          <span id="accent-color-value" class="mono-small">#E8E8F0</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Templates Folder</label>
+        <input type="text" id="settings-templates-folder" class="field-input" placeholder="templates">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Attachments Folder</label>
+        <input type="text" id="settings-attachments-folder" class="field-input" placeholder="source">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="settings-disconnect">DISCONNECT</button>
+        <button class="btn-primary" id="settings-save">SAVE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMMIT MODAL -->
+  <div id="commit-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-title">PUSH CHANGES</div>
+      <div class="field-group">
+        <label class="field-label">Commit message</label>
+        <input type="text" id="commit-message" class="field-input" placeholder="Update notes">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="commit-cancel">CANCEL</button>
+        <button class="btn-primary" id="commit-confirm">PUSH</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RENAME MODAL -->
+  <div id="rename-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-title">RENAME</div>
+      <div class="field-group">
+        <input type="text" id="rename-input" class="field-input">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="rename-cancel">CANCEL</button>
+        <button class="btn-primary" id="rename-confirm">RENAME</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW FILE MODAL -->
+  <div id="newfile-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-title">NEW FILE</div>
+      <div class="field-group">
+        <input type="text" id="newfile-input" class="field-input" placeholder="filename.md">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="newfile-cancel">CANCEL</button>
+        <button class="btn-primary" id="newfile-confirm">CREATE</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
