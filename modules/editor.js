@@ -22,20 +22,31 @@ export function init() {
 function setupMarked() {
   const renderer = new marked.Renderer();
 
-  const originalParagraph = renderer.paragraph.bind(renderer);
-  renderer.paragraph = (token) => {
+  // Helper — applique les parsers Obsidian sur n'importe quel token
+  function applyObsidian(token) {
     const raw = typeof token === 'string' ? token : (token.text || '');
-    const parsed = parseObsidianLinks(parseObsidianTags(raw));
-    if (typeof token === 'string') return originalParagraph(parsed);
-    return originalParagraph({ ...token, text: parsed });
-  };
+    return parseObsidianLinks(parseObsidianTags(raw));
+  }
 
-  const originalHeading = renderer.heading.bind(renderer);
-  renderer.heading = (token) => {
-    if (typeof token === 'string') return originalHeading(token);
-    const parsed = parseObsidianLinks(token.text || '');
-    return originalHeading({ ...token, text: parsed });
-  };
+  function patchToken(original, token) {
+    if (typeof token === 'string') return original(applyObsidian(token));
+    return original({ ...token, text: applyObsidian(token) });
+  }
+
+  const origParagraph = renderer.paragraph.bind(renderer);
+  renderer.paragraph = (token) => patchToken(origParagraph, token);
+
+  const origHeading = renderer.heading.bind(renderer);
+  renderer.heading = (token) => patchToken(origHeading, token);
+
+  const origListitem = renderer.listitem.bind(renderer);
+  renderer.listitem = (token) => patchToken(origListitem, token);
+
+  const origTablecell = renderer.tablecell.bind(renderer);
+  renderer.tablecell = (token) => patchToken(origTablecell, token);
+
+  const origBlockquote = renderer.blockquote.bind(renderer);
+  renderer.blockquote = (token) => patchToken(origBlockquote, token);
 
   renderer.image = (token) => {
     const href = typeof token === 'string' ? token : (token.href || '');
