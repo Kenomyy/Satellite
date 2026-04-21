@@ -9,8 +9,6 @@ let _currentSha = null;
 let _isDirty = false;
 let _saveTimeout = null;
 
-// ─── INIT ────────────────────────────────────────────────
-
 export function init() {
   _editor = document.getElementById('editor');
   _preview = document.getElementById('preview');
@@ -21,44 +19,39 @@ export function init() {
   setupMarked();
 }
 
-// ─── MARKED CONFIG ───────────────────────────────────────
-
 function setupMarked() {
   const renderer = new marked.Renderer();
 
-  // Liens internes Obsidian [[note]] et [[note|alias]]
   const originalParagraph = renderer.paragraph.bind(renderer);
-  renderer.paragraph = (text) => {
-    text = parseObsidianLinks(text);
-    text = parseObsidianTags(text);
-    return originalParagraph(text);
+  renderer.paragraph = (token) => {
+    const raw = typeof token === 'string' ? token : (token.text || '');
+    const parsed = parseObsidianLinks(parseObsidianTags(raw));
+    if (typeof token === 'string') return originalParagraph(parsed);
+    return originalParagraph({ ...token, text: parsed });
   };
 
-  renderer.heading = (text, level) => {
-    text = parseObsidianLinks(text);
-    return `<h${level}>${text}</h${level}>`;
+  const originalHeading = renderer.heading.bind(renderer);
+  renderer.heading = (token) => {
+    if (typeof token === 'string') return originalHeading(token);
+    const parsed = parseObsidianLinks(token.text || '');
+    return originalHeading({ ...token, text: parsed });
   };
 
-  // Images Obsidian ![[image.png]]
-  const originalImage = renderer.image.bind(renderer);
-  renderer.image = (href, title, text) => {
+  renderer.image = (token) => {
+    const href = typeof token === 'string' ? token : (token.href || '');
+    const text = typeof token === 'string' ? '' : (token.text || '');
+    const title = typeof token === 'string' ? '' : (token.title || '');
     return `<img src="${href}" alt="${text}" ${title ? `title="${title}"` : ''} loading="lazy">`;
   };
 
-  marked.setOptions({
-    renderer,
-    breaks: true,
-    gfm: true,
-  });
+  marked.use({ renderer, breaks: true, gfm: true });
 }
-
-// ─── OBSIDIAN SYNTAX PARSERS ─────────────────────────────
 
 function parseObsidianLinks(text) {
   // ![[image.ext]] — image embed
   text = text.replace(/!\[\[([^\]]+)\]\]/g, (_, src) => {
     const cleanSrc = src.split('|')[0].trim();
-    return `<img src="${resolveAttachment(cleanSrc)}" alt="${cleanSrc}" loading="lazy">`;
+    return `<img src="attachment://${cleanSrc}" alt="${cleanSrc}" loading="lazy">`;
   });
 
   // [[note|alias]] ou [[note]]
@@ -72,44 +65,51 @@ function parseObsidianLinks(text) {
 }
 
 function parseObsidianTags(text) {
-  // #tag (pas dans les URLs ni les titres markdown)
-  return text.replace(/(?<![/\w])#([\w\u00C0-\u017F/-]+)/g, (_, tag) => {
+  return text.replace(/(?<![\/\w])#([\w\u00C0-\u017F\/-]+)/g, (_, tag) => {
     return `<span class="ob-tag" data-tag="${tag}">#${tag}</span>`;
   });
 }
 
-function resolveAttachment(filename) {
-  // Sera résolu dynamiquement via GitHub raw content
-  emit('attachment:resolve', { filename });
-  return `attachment://${filename}`; // placeholder, remplacé par app.js
-}
-
-// parseFrontmatter : extrait le YAML frontmatter d'une note
 export function parseFrontmatter(content) {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) return { meta: {}, body: content };
 
   const raw = match[1];
   const meta = {};
+  const lines = raw.split('\n');
+  let i = 0;
 
-  raw.split('\n').forEach(line => {
+  while (i < lines.length) {
+    const line = lines[i];
     const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) return;
+    if (colonIdx === -1) { i++; continue; }
+
     const key = line.slice(0, colonIdx).trim();
     const val = line.slice(colonIdx + 1).trim();
 
-    // Tags: liste YAML inline [a, b] ou valeur simple
+    // Liste inline : tags: [a, b]
     if (val.startsWith('[') && val.endsWith(']')) {
-      meta[key] = val.slice(1, -1).split(',').map(s => s.trim().replace(/^["']|["']$/g, ''));
+      meta[key] = val.slice(1, -1).split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+      i++;
+    // Liste multi-ligne :
+    // tags:
+    //   - item
+    } else if (val === '') {
+      const items = [];
+      i++;
+      while (i < lines.length && lines[i].trim().startsWith('- ')) {
+        items.push(lines[i].trim().slice(2).trim().replace(/^["']|["']$/g, ''));
+        i++;
+      }
+      meta[key] = items.length ? items : '';
     } else {
       meta[key] = val.replace(/^["']|["']$/g, '');
+      i++;
     }
-  });
+  }
 
   return { meta, body: content.slice(match[0].length).trimStart() };
 }
-
-// ─── OPEN FILE ───────────────────────────────────────────
 
 export function openFile(path, content, sha) {
   _currentPath = path;
@@ -118,23 +118,18 @@ export function openFile(path, content, sha) {
 
   _editor.value = content;
 
-  // Cache le empty state, affiche l'éditeur
   document.getElementById('empty-state').classList.add('hidden');
   _container.classList.remove('hidden');
 
-  // Preview off par défaut à l'ouverture
   if (_isPreview) togglePreview();
 
   _editor.focus();
 
-  // Extrait les métadonnées et notifie
   const { meta } = parseFrontmatter(content);
   emit('file:meta', { path, meta });
 
   updateDirtyState();
 }
-
-// ─── PREVIEW ─────────────────────────────────────────────
 
 export function togglePreview() {
   _isPreview = !_isPreview;
@@ -145,7 +140,6 @@ export function togglePreview() {
     _preview.classList.remove('hidden');
     _editor.classList.add('hidden');
 
-    // Attache les handlers sur les liens internes
     _preview.querySelectorAll('.ob-link').forEach(el => {
       el.addEventListener('click', (e) => {
         e.preventDefault();
@@ -153,11 +147,16 @@ export function togglePreview() {
       });
     });
 
-    // Attache les handlers sur les tags
     _preview.querySelectorAll('.ob-tag').forEach(el => {
       el.addEventListener('click', () => {
         emit('tag:filter', { tag: el.dataset.tag });
       });
+    });
+
+    // Resolve attachments
+    _preview.querySelectorAll('img[src^="attachment://"]').forEach(img => {
+      const filename = img.src.replace(/.*attachment:\/\//, '');
+      emit('attachment:resolve', { filename });
     });
   } else {
     _preview.classList.add('hidden');
@@ -170,12 +169,9 @@ export function togglePreview() {
 }
 
 function renderMarkdown(content) {
-  // Cache le frontmatter dans le rendu
-  const withoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
+  const withoutFrontmatter = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
   return marked.parse(withoutFrontmatter);
 }
-
-// ─── DIRTY STATE ─────────────────────────────────────────
 
 function updateDirtyState() {
   const breadcrumb = document.getElementById('breadcrumb');
@@ -185,7 +181,7 @@ function updateDirtyState() {
     ? _currentPath.split('/').pop().replace(/\.md$/, '')
     : '';
 
-  breadcrumb.textContent = _isDirty ? `${name} ●` : name;
+  breadcrumb.textContent = _isDirty ? `${name} \u25CF` : name;
 }
 
 export function getContent() {
@@ -213,8 +209,6 @@ export function clearDirty() {
   updateDirtyState();
 }
 
-// ─── EVENTS ──────────────────────────────────────────────
-
 function setupEvents() {
   _editor.addEventListener('input', () => {
     if (!_isDirty) {
@@ -222,7 +216,6 @@ function setupEvents() {
       updateDirtyState();
     }
 
-    // Auto-index pour backlinks/tags en arrière-plan (debounce 1s)
     clearTimeout(_saveTimeout);
     _saveTimeout = setTimeout(() => {
       emit('editor:changed', {
@@ -232,7 +225,6 @@ function setupEvents() {
     }, 1000);
   });
 
-  // Gestion Tab dans l'éditeur
   _editor.addEventListener('keydown', (e) => {
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -243,7 +235,6 @@ function setupEvents() {
     }
   });
 
-  // Clic sur lien interne en mode preview → déjà géré dans togglePreview
   on('file:opened', ({ path, content, sha }) => {
     openFile(path, content, sha);
   });
@@ -251,13 +242,11 @@ function setupEvents() {
 
 function setupShortcuts() {
   document.addEventListener('keydown', (e) => {
-    // Ctrl+E — toggle preview
     if (e.ctrlKey && e.key === 'e') {
       e.preventDefault();
       if (_currentPath) togglePreview();
     }
 
-    // Ctrl+S — save (emit pour que app.js gère le push si besoin)
     if (e.ctrlKey && e.key === 's') {
       e.preventDefault();
       if (_currentPath && _isDirty) {
@@ -265,14 +254,12 @@ function setupShortcuts() {
       }
     }
 
-    // Ctrl+K — focus search
     if (e.ctrlKey && e.key === 'k') {
       e.preventDefault();
       const searchInput = document.getElementById('search-input');
       if (searchInput) searchInput.focus();
     }
 
-    // Ctrl+N — nouvelle note
     if (e.ctrlKey && e.key === 'n') {
       e.preventDefault();
       emit('file:new-request', { folder: '' });
