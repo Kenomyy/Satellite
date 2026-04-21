@@ -120,12 +120,13 @@ function closeTab(paneId, tabIdx) {
   pane.tabs.splice(tabIdx, 1);
 
   if (pane.tabs.length === 0) {
-    // Supprime le pane si plus d'onglets (sauf si c'est le seul)
-    if (allPanes().length > 1) {
+    const isMain = allPanes().length === 1;
+    if (!isMain) {
+      // Pane secondaire — le supprime
       removePane(paneId);
       return;
     }
-    // Sinon affiche empty state
+    // Pane principal — affiche l'empty state
     renderPane(pane.id);
     emit('pane:empty', { paneId });
     return;
@@ -462,7 +463,7 @@ function renderMarkdownInPane(content) {
 // ── DROP ZONES ───────────────────────────────────────────
 
 function setupDropZones(el, pane) {
-  const zones = ['top', 'bottom', 'left', 'right', 'center'];
+  const zones = ['top', 'bottom', 'left', 'right'];
 
   const overlay = document.createElement('div');
   overlay.className = 'layout-drop-overlay hidden';
@@ -513,37 +514,26 @@ function handleTabDrop(fromPaneId, tabIdx, toPaneId, zone) {
     fromPane.activeIdx = Math.min(fromPane.activeIdx, Math.max(0, fromPane.tabs.length - 1));
   }
 
-  if (zone === 'center') {
-    // Dépose dans le pane cible
-    const toPane = findPane(toPaneId);
-    if (toPane) {
-      toPane.tabs.push(tab);
-      toPane.activeIdx = toPane.tabs.length - 1;
-      _activePaneId = toPane.id;
-    }
-    render();
+  // Toujours splitter selon le bord
+  const direction = (zone === 'left' || zone === 'right') ? 'v' : 'h';
+  const newPane = makePane([tab]);
+  const target = findPane(toPaneId);
+  if (!target) { render(); return; }
+
+  const first = (zone === 'top' || zone === 'left') ? newPane : target;
+  const second = (zone === 'top' || zone === 'left') ? target : newPane;
+  const split = makeSplit(direction, 0.5, first, second);
+
+  const parent = findParent(toPaneId);
+  if (!parent) {
+    _root = split;
   } else {
-    // Split le pane cible
-    const direction = (zone === 'left' || zone === 'right') ? 'v' : 'h';
-    const newPane = makePane([tab]);
-    const target = findPane(toPaneId);
-    if (!target) { render(); return; }
-
-    const first = (zone === 'top' || zone === 'left') ? newPane : target;
-    const second = (zone === 'top' || zone === 'left') ? target : newPane;
-    const split = makeSplit(direction, 0.5, first, second);
-
-    const parent = findParent(toPaneId);
-    if (!parent) {
-      _root = split;
-    } else {
-      const idx = parent.children.findIndex(c => c.id === toPaneId);
-      parent.children[idx] = split;
-    }
-
-    _activePaneId = newPane.id;
-    render();
+    const idx = parent.children.findIndex(c => c.id === toPaneId);
+    parent.children[idx] = split;
   }
+
+  _activePaneId = newPane.id;
+  render();
 }
 
 // ── RESIZE ───────────────────────────────────────────────
@@ -653,7 +643,10 @@ export function openGraphInPane(paneId) {
   pane.activeIdx = pane.tabs.length - 1;
   renderPane(pane.id);
   // Re-init le canvas graph
-  setTimeout(() => emit('graph:mount', { paneId: pane.id }), 50);
+  setTimeout(() => {
+    const canvas = _container.querySelector(`.layout-graph-canvas[data-pane="${pane.id}"]`);
+    emit('graph:mount', { paneId: pane.id, canvas });
+  }, 100);
 }
 
 // ── UTILS ────────────────────────────────────────────────

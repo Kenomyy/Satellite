@@ -24,9 +24,22 @@ let _scale = 1;
 // ─── INIT ────────────────────────────────────────────────
 
 export function init() {
-  _canvas = document.getElementById('graph-canvas');
-  if (!_canvas) return;
-  _ctx = _canvas.getContext('2d');
+  // Le canvas est maintenant dynamique, monté via graph:mount
+  on('graph:mount', ({ canvas }) => {
+    if (!canvas) return;
+    _canvas = canvas;
+    _ctx = _canvas.getContext('2d');
+    resizeCanvas();
+    if (_nodes.size > 0) {
+      startLoop();
+    } else {
+      // Vault pas encore indexée — attend
+      on('vault:indexed', ({ files }) => {
+        buildGraph(files);
+      });
+    }
+    setupInteraction();
+  });
 
   on('vault:indexed', ({ files, tree }) => {
     _tree = tree || [];
@@ -38,21 +51,13 @@ export function init() {
     highlightNode(path);
   });
 
+  on('pane:tab-activated', ({ path }) => {
+    _currentPath = path;
+  });
+
   on('editor:changed', () => {
     scheduleRebuild();
   });
-
-  on('sidebar:tab', ({ tab }) => {
-    if (tab === 'graph') {
-      resizeCanvas();
-      startLoop();
-    } else {
-      stopLoop();
-    }
-  });
-
-  setupInteraction();
-  resizeCanvas();
 }
 
 // ─── BUILD GRAPH ─────────────────────────────────────────
@@ -276,8 +281,8 @@ function stopLoop() {
 }
 
 function isTabVisible() {
-  const tab = document.getElementById('tab-graph');
-  return tab && tab.classList.contains('active');
+  // Le graph est visible si son canvas est dans le DOM
+  return _canvas && document.contains(_canvas);
 }
 
 // ─── HIGHLIGHT ───────────────────────────────────────────
@@ -384,6 +389,7 @@ function hitTest(wx, wy) {
 
 function resizeCanvas() {
   if (!_canvas || !_canvas.parentElement) return;
-  _canvas.width = _canvas.parentElement.clientWidth;
-  _canvas.height = _canvas.parentElement.clientHeight;
+  const rect = _canvas.parentElement.getBoundingClientRect();
+  _canvas.width = rect.width || 400;
+  _canvas.height = rect.height || 400;
 }
