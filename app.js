@@ -8,6 +8,7 @@ import * as Backlinks from './modules/backlinks.js';
 import * as Graph from './modules/graph.js';
 import * as Templates from './modules/templates.js';
 import * as Conflicts from './modules/conflicts.js';
+import * as Tabs from './modules/tabs.js';
 
 // ─── STATE ───────────────────────────────────────────────
 
@@ -92,6 +93,7 @@ function showApp() {
   Backlinks.init();
   Graph.init();
   Conflicts.init();
+  Tabs.init();
   Templates.init(state.settings.templatesFolder);
 
   setupSidebar();
@@ -154,20 +156,8 @@ async function indexVault(tree) {
 
 function setupFileOps() {
 
-  // Ouvre un fichier
-  on('file:open', async ({ path, sha }) => {
-    // Sauvegarde silencieuse en memoire avant de changer de note
-    if (Editor.isDirty()) {
-      const currentPath = Editor.getCurrentPath();
-      const currentContent = Editor.getContent();
-      if (currentPath) {
-        const cached = state.fileCache.get(currentPath);
-        state.fileCache.set(currentPath, { content: currentContent, sha: cached?.sha });
-        state.dirtyFiles.set(currentPath, currentContent);
-        Editor.clearDirty();
-      }
-    }
-
+  // Ouvre un fichier (newTab = true si clic molette)
+  on('file:open', async ({ path, sha, newTab }) => {
     setSyncStatus('syncing', 'Loading…');
 
     try {
@@ -179,13 +169,27 @@ function setupFileOps() {
         state.fileCache.set(path, cached);
       }
 
-      emit('file:opened', { path, content: cached.content, sha: cached.sha });
-      updateBreadcrumb(path);
+      Tabs.openTab(path, cached.content, cached.sha, !!newTab);
       setSyncStatus('ok', syncLabel());
     } catch (err) {
       setSyncStatus('error', 'Load failed');
       console.error('file:open:', err);
     }
+  });
+
+  // Activation d'un onglet → charge dans l'éditeur
+  on('tab:activate', ({ path, content, sha }) => {
+    emit('file:opened', { path, content, sha });
+    updateBreadcrumb(path);
+    emit('explorer:highlight', { path });
+  });
+
+  // Plus d'onglets ouverts → empty state
+  on('tabs:empty', () => {
+    document.getElementById('editor-container').classList.add('hidden');
+    document.getElementById('empty-state').classList.remove('hidden');
+    document.getElementById('backlinks-panel').classList.add('hidden');
+    document.getElementById('breadcrumb').textContent = '';
   });
 
   // Ouvre par nom (depuis un [[lien]])
@@ -208,9 +212,10 @@ function setupFileOps() {
 
   // Sauvegarde locale (Ctrl+S)
   on('file:save', async ({ path, content, sha }) => {
-    state.fileCache.set(path, { content, sha });
+    const cached = state.fileCache.get(path);
+    state.fileCache.set(path, { content, sha: cached?.sha });
     state.dirtyFiles.set(path, content);
-    Editor.clearDirty();
+    emit('file:saved-silent', { path, content, sha: cached?.sha });
     setSyncStatus('ok', `${state.dirtyFiles.size} unsaved`);
   });
 
@@ -467,7 +472,12 @@ async function pushAllChanges(message) {
   setSyncStatus('syncing', 'Pushing…');
 
   try {
-    // Ajoute le fichier actif s'il est dirty
+    // Ajoute tous les onglets dirty
+    const dirtyTabs = Tabs.getDirtyTabs();
+    for (const tab of dirtyTabs) {
+      state.dirtyFiles.set(tab.path, tab.content);
+    }
+    // Ajoute aussi l'onglet actif si l'éditeur a des modifs non propagées
     if (Editor.isDirty()) {
       const path = Editor.getCurrentPath();
       const content = Editor.getContent();

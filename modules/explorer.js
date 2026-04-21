@@ -15,6 +15,11 @@ export function init(container) {
     render();
   });
 
+  on('explorer:highlight', ({ path }) => {
+    _activeFile = path;
+    updateActive();
+  });
+
   on('file:opened', ({ path }) => {
     _activeFile = path;
     updateActive();
@@ -107,7 +112,15 @@ function renderFile(node, depth) {
   if (_activeFile === node.path) row.classList.add('active');
 
   row.addEventListener('click', () => {
-    emit('file:open', { path: node.path, sha: node.sha });
+    emit('file:open', { path: node.path, sha: node.sha, newTab: false });
+  });
+
+  // Clic molette → nouvel onglet
+  row.addEventListener('auxclick', (e) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      emit('file:open', { path: node.path, sha: node.sha, newTab: true });
+    }
   });
 
   row.addEventListener('contextmenu', (e) => {

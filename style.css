@@ -169,10 +169,10 @@ html, body {
   background: transparent;
   border: 0.5px solid var(--border);
   border-radius: var(--radius-sm);
-  color: var(--text-disabled);
+  color: var(--text-secondary);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   padding: 5px 10px;
   transition: border-color 0.15s, color 0.15s;
 }
@@ -234,9 +234,9 @@ html, body {
 
 .app-name {
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.25em;
+  letter-spacing: 0.2em;
   color: var(--accent);
 }
 
@@ -292,11 +292,11 @@ html, body {
   flex: 1;
   background: transparent;
   border: none;
-  color: var(--text-disabled);
+  color: var(--text-secondary);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 7px;
-  letter-spacing: 0.15em;
+  font-size: 9px;
+  letter-spacing: 0.12em;
   padding: 8px 4px;
   transition: color 0.15s;
 }
@@ -372,10 +372,10 @@ html, body {
 
 .explorer-folder-name {
   font-family: var(--font-ui);
-  font-size: 7px;
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--text-disabled);
+  color: var(--text-secondary);
 }
 
 .explorer-children {
@@ -508,8 +508,8 @@ html, body {
 
 .sync-label {
   font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-disabled);
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 /* ─── EDITOR AREA ────────────────────────────────────── */
@@ -931,4 +931,70 @@ kbd {
   background: transparent;
   color: var(--accent);
   font-weight: 500;
+}
+
+/* TAB BAR */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-elevated);
+  border-bottom: 0.5px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+
+.tab-bar::-webkit-scrollbar { display: none; }
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 36px;
+  border-right: 0.5px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-body);
+  transition: background 0.1s, color 0.1s;
+  min-width: 0;
+  max-width: 200px;
+}
+
+.tab-item:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.tab-item.active {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  border-bottom: 0.5px solid var(--accent);
+}
+
+.tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-close {
+  background: transparent;
+  border: none;
+  color: var(--text-disabled);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.1s, background 0.1s;
+}
+
+.tab-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface);
 }
