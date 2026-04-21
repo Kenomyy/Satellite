@@ -24,35 +24,35 @@ let _scale = 1;
 // ─── INIT ────────────────────────────────────────────────
 
 export function init() {
-  // Le canvas est maintenant dynamique, monté via graph:mount
   on('graph:mount', ({ canvas }) => {
     if (!canvas) return;
+    // Stop l'ancienne loop si elle tourne
+    stopLoop();
     _canvas = canvas;
     _ctx = _canvas.getContext('2d');
     resizeCanvas();
+    setupInteraction();
+    // Redessine immédiatement si on a déjà des données
     if (_nodes.size > 0) {
       startLoop();
-    } else {
-      // Vault pas encore indexée — attend
-      on('vault:indexed', ({ files }) => {
-        buildGraph(files);
-      });
     }
-    setupInteraction();
   });
 
   on('vault:indexed', ({ files, tree }) => {
     _tree = tree || [];
     buildGraph(files);
+    // Si un canvas est monté, démarre la loop
+    if (_canvas && document.contains(_canvas)) startLoop();
+  });
+
+  on('pane:tab-activated', ({ path, paneId }) => {
+    if (path === '__graph__') return; // géré par graph:mount
+    _currentPath = path;
+    // Pas besoin de stopper la loop — le graph continue en arrière-plan
   });
 
   on('file:opened', ({ path }) => {
-    _currentPath = path;
-    highlightNode(path);
-  });
-
-  on('pane:tab-activated', ({ path }) => {
-    _currentPath = path;
+    if (path !== '__graph__') _currentPath = path;
   });
 
   on('editor:changed', () => {

@@ -1241,17 +1241,16 @@ kbd {
 
 .layout-drop-zone {
   position: absolute;
-  background: rgba(232, 232, 240, 0.04);
-  border: 1px dashed var(--text-disabled);
-  transition: background 0.1s, border-color 0.1s;
+  background: transparent;
+  transition: background 0.1s;
 }
 
 .layout-drop-zone.hover {
-  background: rgba(232, 232, 240, 0.1);
-  border-color: var(--accent);
+  background: rgba(232, 232, 240, 0.06);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-.layout-drop-top    { top: 0; left: 0; right: 0; height: 30%; }
-.layout-drop-bottom { bottom: 0; left: 0; right: 0; height: 30%; }
-.layout-drop-left   { top: 0; bottom: 0; left: 0; width: 30%; }
-.layout-drop-right  { top: 0; bottom: 0; right: 0; width: 30%; }
+.layout-drop-top    { top: 0; left: 0; right: 0; height: 25%; }
+.layout-drop-bottom { bottom: 0; left: 0; right: 0; height: 25%; }
+.layout-drop-left   { top: 0; bottom: 0; left: 0; width: 25%; }
+.layout-drop-right  { top: 0; bottom: 0; right: 0; width: 25%; }

@@ -1,9 +1,5 @@
 import { emit, on } from './bus.js';
 
-// Un layout est un arbre de noeuds :
-// { type: 'pane', id, tabs: [{path,content,sha,isDirty}], activeIdx }
-// { type: 'split', id, direction: 'h'|'v', ratio: 0-1, children: [node, node] }
-
 let _root = null;
 let _activePaneId = null;
 let _container = null;
@@ -16,29 +12,11 @@ function uid() { return ++_idCounter; }
 
 export function init(container) {
   _container = container;
-
-  // Pane initial vide
   _root = makePane();
   _activePaneId = _root.id;
 
-  on('file:open', async ({ path, content, sha, newTab, paneId }) => {
-    if (content !== undefined) {
-      // Contenu déjà chargé
-      openInPane(paneId || _activePaneId, path, content, sha, newTab);
-    }
-    // Sinon app.js charge et re-émet avec content
-  });
-
   on('file:loaded', ({ path, content, sha, newTab, paneId }) => {
     openInPane(paneId || _activePaneId, path, content, sha, newTab);
-  });
-
-  on('tab:close', ({ paneId, tabIdx }) => {
-    closeTab(paneId, tabIdx);
-  });
-
-  on('tab:activate', ({ paneId, tabIdx }) => {
-    setActiveTab(paneId, tabIdx);
   });
 
   on('editor:changed', ({ path, content, paneId }) => {
@@ -46,15 +24,13 @@ export function init(container) {
     if (!pane) return;
     const tab = pane.tabs.find(t => t.path === path);
     if (tab) { tab.content = content; tab.isDirty = true; }
-    renderPane(paneId || _activePaneId);
+    renderTabBar(pane);
   });
 
   on('file:saved-silent', ({ path }) => {
-    // Marque tous les onglets avec ce path comme clean
     allPanes().forEach(pane => {
       const tab = pane.tabs.find(t => t.path === path);
-      if (tab) tab.isDirty = false;
-      renderPane(pane.id);
+      if (tab) { tab.isDirty = false; renderTabBar(pane); }
     });
   });
 
@@ -81,12 +57,12 @@ export function openInPane(paneId, path, content, sha, inNewTab = false) {
   const pane = findPane(paneId);
   if (!pane) return;
 
-  // Déjà ouvert dans ce pane ?
   const existing = pane.tabs.findIndex(t => t.path === path);
   if (existing !== -1) {
     pane.activeIdx = existing;
     _activePaneId = pane.id;
-    renderPane(pane.id);
+    renderTabBar(pane);
+    renderPaneContent(pane);
     emitActivate(pane);
     return;
   }
@@ -97,7 +73,6 @@ export function openInPane(paneId, path, content, sha, inNewTab = false) {
     pane.tabs.push(tab);
     pane.activeIdx = pane.tabs.length - 1;
   } else {
-    // Remplace l'onglet actif si pas dirty
     if (pane.tabs[pane.activeIdx]?.isDirty) {
       pane.tabs.push(tab);
       pane.activeIdx = pane.tabs.length - 1;
@@ -107,7 +82,8 @@ export function openInPane(paneId, path, content, sha, inNewTab = false) {
   }
 
   _activePaneId = pane.id;
-  renderPane(pane.id);
+  renderTabBar(pane);
+  renderPaneContent(pane);
   emitActivate(pane);
 }
 
@@ -120,20 +96,22 @@ function closeTab(paneId, tabIdx) {
   pane.tabs.splice(tabIdx, 1);
 
   if (pane.tabs.length === 0) {
-    const isMain = allPanes().length === 1;
-    if (!isMain) {
-      // Pane secondaire — le supprime
-      removePane(paneId);
+    const isLast = allPanes().length === 1;
+    if (isLast) {
+      // Pane principal — empty state
+      renderTabBar(pane);
+      renderPaneContent(pane);
+      emit('pane:empty', { paneId });
       return;
     }
-    // Pane principal — affiche l'empty state
-    renderPane(pane.id);
-    emit('pane:empty', { paneId });
+    // Pane secondaire — le ferme
+    removePane(paneId);
     return;
   }
 
   pane.activeIdx = Math.min(pane.activeIdx, pane.tabs.length - 1);
-  renderPane(pane.id);
+  renderTabBar(pane);
+  renderPaneContent(pane);
   emitActivate(pane);
 }
 
@@ -144,7 +122,8 @@ function setActiveTab(paneId, tabIdx) {
   if (!pane) return;
   pane.activeIdx = tabIdx;
   _activePaneId = pane.id;
-  renderPane(pane.id);
+  renderTabBar(pane);
+  renderPaneContent(pane);
   emitActivate(pane);
 }
 
@@ -166,7 +145,6 @@ export function splitPane(paneId, direction) {
   const parent = findParent(paneId);
 
   if (!parent) {
-    // C'est le root
     _root = makeSplit(direction, 0.5, _root, newPane);
   } else {
     const idx = parent.children.findIndex(c => c.id === paneId);
@@ -182,12 +160,11 @@ export function splitPane(paneId, direction) {
 
 function removePane(paneId) {
   const parent = findParent(paneId);
-  if (!parent) return; // root, on peut pas supprimer
+  if (!parent) return;
 
   const idx = parent.children.findIndex(c => c.id === paneId);
   const sibling = parent.children[1 - idx];
 
-  // Remplace le split par le sibling dans le grand-parent
   const grandParent = findParent(parent.id);
   if (!grandParent) {
     _root = sibling;
@@ -196,7 +173,6 @@ function removePane(paneId) {
     grandParent.children[parentIdx] = sibling;
   }
 
-  // Active le pane sibling
   const firstPane = firstPaneIn(sibling);
   if (firstPane) {
     _activePaneId = firstPane.id;
@@ -206,7 +182,7 @@ function removePane(paneId) {
   render();
 }
 
-// ── RENDER ───────────────────────────────────────────────
+// ── RENDER FULL ──────────────────────────────────────────
 
 export function render() {
   if (!_container) return;
@@ -224,10 +200,22 @@ function renderPaneEl(pane) {
   el.className = `layout-pane ${pane.id === _activePaneId ? 'active' : ''}`;
   el.dataset.paneId = pane.id;
 
-  // Tab bar
+  const tabBar = buildTabBar(pane);
+  const content = buildPaneContent(pane);
+
+  el.appendChild(tabBar);
+  el.appendChild(content);
+
+  setupPaneEvents(el, pane);
+  return el;
+}
+
+// ── TAB BAR ──────────────────────────────────────────────
+
+function buildTabBar(pane) {
   const tabBar = document.createElement('div');
   tabBar.className = 'layout-tab-bar';
-  tabBar.dataset.paneId = pane.id;
+  tabBar.dataset.paneTabBar = pane.id;
 
   if (pane.tabs.length === 0) {
     tabBar.innerHTML = `<span class="layout-tab-empty">Empty pane</span>`;
@@ -246,7 +234,6 @@ function renderPaneEl(pane) {
     }).join('');
   }
 
-  // Actions pane (split buttons)
   const actions = document.createElement('div');
   actions.className = 'layout-pane-actions';
   actions.innerHTML = `
@@ -255,185 +242,146 @@ function renderPaneEl(pane) {
   `;
   tabBar.appendChild(actions);
 
-  // Content
-  const content = document.createElement('div');
-  content.className = 'layout-pane-content';
-  content.dataset.paneId = pane.id;
-
-  if (pane.tabs.length === 0) {
-    content.innerHTML = `<div class="layout-empty-state">Drop a file here or open one</div>`;
-  } else {
-    const activeTab = pane.tabs[pane.activeIdx];
-    if (activeTab?.path === '__graph__') {
-      content.innerHTML = `<canvas class="layout-graph-canvas" data-pane="${pane.id}"></canvas>`;
-    } else {
-      content.innerHTML = `
-        <textarea class="layout-editor" data-pane="${pane.id}" spellcheck="false">${escHtml(activeTab?.content || '')}</textarea>
-        <div class="layout-preview hidden" data-pane="${pane.id}"></div>
-      `;
-    }
-  }
-
-  el.appendChild(tabBar);
-  el.appendChild(content);
-
-  setupPaneEvents(el, pane);
-  return el;
+  setupTabBarEvents(tabBar, pane);
+  return tabBar;
 }
 
-function renderSplitEl(node) {
-  const el = document.createElement('div');
-  el.className = `layout-split layout-split-${node.direction === 'h' ? 'horizontal' : 'vertical'}`;
-  el.dataset.splitId = node.id;
-
-  const a = document.createElement('div');
-  a.className = 'layout-split-child';
-  a.style.flexBasis = `${node.ratio * 100}%`;
-  a.appendChild(renderNode(node.children[0]));
-
-  const handle = document.createElement('div');
-  handle.className = `layout-resize-handle layout-resize-${node.direction}`;
-  handle.dataset.splitId = node.id;
-  setupResizeHandle(handle, node, a);
-
-  const b = document.createElement('div');
-  b.className = 'layout-split-child';
-  b.style.flex = '1';
-  b.appendChild(renderNode(node.children[1]));
-
-  el.appendChild(a);
-  el.appendChild(handle);
-  el.appendChild(b);
-
-  return el;
+function renderTabBar(pane) {
+  const existing = _container.querySelector(`[data-pane-tab-bar="${pane.id}"]`);
+  if (!existing) return;
+  const newBar = buildTabBar(pane);
+  existing.replaceWith(newBar);
 }
 
-function renderPane(paneId) {
-  const el = _container.querySelector(`[data-pane-id="${paneId}"]`);
-  if (!el) { render(); return; }
-  const pane = findPane(paneId);
-  if (!pane) return;
-  const newEl = renderPaneEl(pane);
-  el.replaceWith(newEl);
-}
-
-// ── PANE EVENTS ──────────────────────────────────────────
-
-function setupPaneEvents(el, pane) {
-  // Focus pane au clic
-  el.addEventListener('mousedown', () => {
-    if (_activePaneId !== pane.id) {
-      _activePaneId = pane.id;
-      _container.querySelectorAll('.layout-pane').forEach(p => p.classList.remove('active'));
-      el.classList.add('active');
-      emitActivate(pane);
-    }
-  });
-
-  // Tabs — clic
-  el.querySelectorAll('.layout-tab').forEach(tab => {
+function setupTabBarEvents(tabBar, pane) {
+  tabBar.querySelectorAll('.layout-tab').forEach(tab => {
     tab.addEventListener('click', (e) => {
       if (e.target.classList.contains('layout-tab-close')) return;
       setActiveTab(tab.dataset.pane, parseInt(tab.dataset.idx));
     });
 
-    // Clic molette → ferme
     tab.addEventListener('auxclick', (e) => {
-      if (e.button === 1) {
-        e.preventDefault();
-        closeTab(tab.dataset.pane, parseInt(tab.dataset.idx));
-      }
+      if (e.button === 1) { e.preventDefault(); closeTab(tab.dataset.pane, parseInt(tab.dataset.idx)); }
     });
 
-    // Drag tab
     tab.addEventListener('dragstart', (e) => {
       _dragState = { fromPane: tab.dataset.pane, tabIdx: parseInt(tab.dataset.idx) };
       e.dataTransfer.effectAllowed = 'move';
+      tab.classList.add('dragging');
     });
+
+    tab.addEventListener('dragend', () => tab.classList.remove('dragging'));
   });
 
-  // Tabs — fermeture
-  el.querySelectorAll('.layout-tab-close').forEach(btn => {
+  tabBar.querySelectorAll('.layout-tab-close').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       closeTab(btn.dataset.pane, parseInt(btn.dataset.idx));
     });
   });
 
-  // Split buttons
-  el.querySelectorAll('.layout-split-btn').forEach(btn => {
+  tabBar.querySelectorAll('.layout-split-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       splitPane(btn.dataset.pane, btn.dataset.dir);
     });
   });
+}
 
-  // Drop zones
-  setupDropZones(el, pane);
+// ── PANE CONTENT ─────────────────────────────────────────
 
-  // Editor input
-  const editor = el.querySelector('.layout-editor');
-  if (editor) {
-    editor.addEventListener('input', () => {
-      const tab = pane.tabs[pane.activeIdx];
-      if (!tab) return;
-      tab.content = editor.value;
-      tab.isDirty = true;
+function buildPaneContent(pane) {
+  const content = document.createElement('div');
+  content.className = 'layout-pane-content';
+  content.dataset.paneContent = pane.id;
 
-      // Met à jour le titre de l'onglet
-      const tabEl = el.querySelector(`.layout-tab[data-idx="${pane.activeIdx}"]`);
-      if (tabEl) {
-        const nameEl = tabEl.querySelector('.layout-tab-name');
-        if (nameEl) {
-          const name = tab.path.split('/').pop().replace(/\.md$/, '');
-          nameEl.textContent = `${name} \u25CF`;
-        }
-      }
-
-      emit('editor:changed', { path: tab.path, content: editor.value, paneId: pane.id });
-    });
-
-    editor.addEventListener('keydown', (e) => {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        const s = editor.selectionStart;
-        editor.value = editor.value.slice(0, s) + '  ' + editor.value.slice(editor.selectionEnd);
-        editor.selectionStart = editor.selectionEnd = s + 2;
-      }
-      if (e.ctrlKey && e.key === 'e') {
-        e.preventDefault();
-        togglePreviewInPane(pane, el);
-      }
-      if (e.ctrlKey && e.key === 's') {
-        e.preventDefault();
-        const tab = pane.tabs[pane.activeIdx];
-        if (tab) emit('file:save', { path: tab.path, content: editor.value, paneId: pane.id });
-      }
-      if (e.ctrlKey && e.key === 'w') {
-        e.preventDefault();
-        closeTab(pane.id, pane.activeIdx);
-      }
-    });
+  if (pane.tabs.length === 0) {
+    content.innerHTML = `<div class="layout-empty-state">Open a file or drop a tab here</div>`;
+    setupDropTarget(content, pane);
+    return content;
   }
 
-  // Keyboard shortcuts globaux pour le pane actif
-  el.addEventListener('keydown', (e) => {
+  const activeTab = pane.tabs[pane.activeIdx];
+
+  if (activeTab?.path === '__graph__') {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'layout-graph-canvas';
+    canvas.dataset.pane = pane.id;
+    content.appendChild(canvas);
+    setTimeout(() => {
+      const rect = content.getBoundingClientRect();
+      canvas.width = rect.width || 600;
+      canvas.height = rect.height || 400;
+      emit('graph:mount', { paneId: pane.id, canvas });
+    }, 80);
+  } else {
+    const editor = document.createElement('textarea');
+    editor.className = 'layout-editor';
+    editor.dataset.pane = pane.id;
+    editor.spellcheck = false;
+    editor.value = activeTab?.content || '';
+
+    const preview = document.createElement('div');
+    preview.className = 'layout-preview hidden';
+    preview.dataset.pane = pane.id;
+
+    content.appendChild(editor);
+    content.appendChild(preview);
+
+    setupEditorEvents(editor, preview, pane);
+  }
+
+  setupDropTarget(content, pane);
+  return content;
+}
+
+function renderPaneContent(pane) {
+  const existing = _container.querySelector(`[data-pane-content="${pane.id}"]`);
+  if (!existing) return;
+  const newContent = buildPaneContent(pane);
+  existing.replaceWith(newContent);
+}
+
+// ── EDITOR EVENTS ────────────────────────────────────────
+
+function setupEditorEvents(editor, preview, pane) {
+  editor.addEventListener('input', () => {
+    const tab = pane.tabs[pane.activeIdx];
+    if (!tab) return;
+    tab.content = editor.value;
+    tab.isDirty = true;
+    renderTabBar(pane);
+    emit('editor:changed', { path: tab.path, content: editor.value, paneId: pane.id });
+  });
+
+  editor.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = editor.selectionStart;
+      editor.value = editor.value.slice(0, s) + '  ' + editor.value.slice(editor.selectionEnd);
+      editor.selectionStart = editor.selectionEnd = s + 2;
+    }
+    if (e.ctrlKey && e.key === 'e') {
+      e.preventDefault();
+      togglePreview(editor, preview, pane);
+    }
+    if (e.ctrlKey && e.key === 's') {
+      e.preventDefault();
+      const tab = pane.tabs[pane.activeIdx];
+      if (tab) emit('file:save', { path: tab.path, content: editor.value, paneId: pane.id });
+    }
+    if (e.ctrlKey && e.key === 'w') {
+      e.preventDefault();
+      closeTab(pane.id, pane.activeIdx);
+    }
     if (e.ctrlKey && e.key === 'Tab') {
       e.preventDefault();
-      if (pane.tabs.length > 1) {
-        setActiveTab(pane.id, (pane.activeIdx + 1) % pane.tabs.length);
-      }
+      if (pane.tabs.length > 1) setActiveTab(pane.id, (pane.activeIdx + 1) % pane.tabs.length);
     }
   });
 }
 
-// ── PREVIEW IN PANE ──────────────────────────────────────
-
-function togglePreviewInPane(pane, el) {
-  const editor = el.querySelector('.layout-editor');
-  const preview = el.querySelector('.layout-preview');
-  if (!editor || !preview) return;
-
+function togglePreview(editor, preview, pane) {
   const isPreview = !preview.classList.contains('hidden');
   if (isPreview) {
     preview.classList.add('hidden');
@@ -441,11 +389,10 @@ function togglePreviewInPane(pane, el) {
   } else {
     const tab = pane.tabs[pane.activeIdx];
     if (!tab) return;
-    preview.innerHTML = renderMarkdownInPane(tab.content || '');
+    preview.innerHTML = renderMarkdown(tab.content || '');
     preview.classList.remove('hidden');
     editor.classList.add('hidden');
 
-    // Liens internes
     preview.querySelectorAll('.ob-link').forEach(a => {
       a.addEventListener('click', (e) => {
         e.preventDefault();
@@ -455,14 +402,24 @@ function togglePreviewInPane(pane, el) {
   }
 }
 
-function renderMarkdownInPane(content) {
-  const withoutFrontmatter = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
-  return typeof marked !== 'undefined' ? marked.parse(withoutFrontmatter) : withoutFrontmatter;
+function renderMarkdown(content) {
+  const clean = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
+  if (typeof marked === 'undefined') return clean;
+
+  // Parse Obsidian links
+  const withLinks = clean
+    .replace(/!\[\[([^\]]+)\]\]/g, (_, src) => `![${src}](attachment://${src.split('|')[0].trim()})`)
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, path, alias) =>
+      `<a class="ob-link" data-target="${path}" href="#">${alias || path}</a>`
+    );
+
+  return marked.parse(withLinks);
 }
 
-// ── DROP ZONES ───────────────────────────────────────────
+// ── DROP TARGET ──────────────────────────────────────────
 
-function setupDropZones(el, pane) {
+function setupDropTarget(el, pane) {
+  // Zones de drop sur les 4 bords — apparaissent seulement pendant le drag
   const zones = ['top', 'bottom', 'left', 'right'];
 
   const overlay = document.createElement('div');
@@ -483,12 +440,19 @@ function setupDropZones(el, pane) {
   });
 
   overlay.querySelectorAll('.layout-drop-zone').forEach(zone => {
-    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('hover'); });
+    zone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Highlight seulement la zone survolée
+      overlay.querySelectorAll('.layout-drop-zone').forEach(z => z.classList.remove('hover'));
+      zone.classList.add('hover');
+    });
     zone.addEventListener('dragleave', () => zone.classList.remove('hover'));
     zone.addEventListener('drop', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       overlay.classList.add('hidden');
-      zone.classList.remove('hover');
+      overlay.querySelectorAll('.layout-drop-zone').forEach(z => z.classList.remove('hover'));
 
       if (!_dragState) return;
       const { fromPane, tabIdx } = _dragState;
@@ -500,21 +464,24 @@ function setupDropZones(el, pane) {
 }
 
 function handleTabDrop(fromPaneId, tabIdx, toPaneId, zone) {
+  if (fromPaneId === toPaneId) return;
+
   const fromPane = findPane(fromPaneId);
   if (!fromPane) return;
 
-  const tab = fromPane.tabs[tabIdx];
-  if (!tab) return;
+  const tab = { ...fromPane.tabs[tabIdx] };
 
-  // Retire le tab du pane source
+  // Retire du pane source
   fromPane.tabs.splice(tabIdx, 1);
   if (fromPane.tabs.length === 0 && allPanes().length > 1) {
     removePane(fromPaneId);
-  } else {
-    fromPane.activeIdx = Math.min(fromPane.activeIdx, Math.max(0, fromPane.tabs.length - 1));
+  } else if (fromPane.tabs.length > 0) {
+    fromPane.activeIdx = Math.min(fromPane.activeIdx, fromPane.tabs.length - 1);
+    renderTabBar(fromPane);
+    renderPaneContent(fromPane);
   }
 
-  // Toujours splitter selon le bord
+  // Direction du split selon le bord
   const direction = (zone === 'left' || zone === 'right') ? 'v' : 'h';
   const newPane = makePane([tab]);
   const target = findPane(toPaneId);
@@ -534,6 +501,48 @@ function handleTabDrop(fromPaneId, tabIdx, toPaneId, zone) {
 
   _activePaneId = newPane.id;
   render();
+  emitActivate(newPane);
+}
+
+// ── SPLIT EL ─────────────────────────────────────────────
+
+function renderSplitEl(node) {
+  const el = document.createElement('div');
+  el.className = `layout-split layout-split-${node.direction === 'h' ? 'horizontal' : 'vertical'}`;
+  el.dataset.splitId = node.id;
+
+  const a = document.createElement('div');
+  a.className = 'layout-split-child';
+  a.style.flexBasis = `${node.ratio * 100}%`;
+  a.appendChild(renderNode(node.children[0]));
+
+  const handle = document.createElement('div');
+  handle.className = `layout-resize-handle layout-resize-${node.direction}`;
+  setupResizeHandle(handle, node, a);
+
+  const b = document.createElement('div');
+  b.className = 'layout-split-child';
+  b.style.flex = '1';
+  b.appendChild(renderNode(node.children[1]));
+
+  el.appendChild(a);
+  el.appendChild(handle);
+  el.appendChild(b);
+
+  return el;
+}
+
+// ── PANE EVENTS ──────────────────────────────────────────
+
+function setupPaneEvents(el, pane) {
+  el.addEventListener('mousedown', () => {
+    if (_activePaneId !== pane.id) {
+      _activePaneId = pane.id;
+      _container.querySelectorAll('.layout-pane').forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+      emitActivate(pane);
+    }
+  });
 }
 
 // ── RESIZE ───────────────────────────────────────────────
@@ -552,13 +561,9 @@ function setupResizeHandle(handle, splitNode, firstChild) {
     const onMove = (e) => {
       const rect = _container.getBoundingClientRect();
       if (splitNode.direction === 'v') {
-        const total = rect.width;
-        const delta = (e.clientX - startX) / total;
-        splitNode.ratio = Math.min(0.85, Math.max(0.15, startRatio + delta));
+        splitNode.ratio = Math.min(0.85, Math.max(0.15, startRatio + (e.clientX - startX) / rect.width));
       } else {
-        const total = rect.height;
-        const delta = (e.clientY - startY) / total;
-        splitNode.ratio = Math.min(0.85, Math.max(0.15, startRatio + delta));
+        splitNode.ratio = Math.min(0.85, Math.max(0.15, startRatio + (e.clientY - startY) / rect.height));
       }
       firstChild.style.flexBasis = `${splitNode.ratio * 100}%`;
     };
@@ -575,15 +580,31 @@ function setupResizeHandle(handle, splitNode, firstChild) {
   });
 }
 
+// ── GRAPH ────────────────────────────────────────────────
+
+export function openGraphInPane(paneId) {
+  const pane = findPane(paneId || _activePaneId);
+  if (!pane) return;
+
+  const existing = pane.tabs.findIndex(t => t.path === '__graph__');
+  if (existing !== -1) {
+    setActiveTab(pane.id, existing);
+    return;
+  }
+
+  pane.tabs.push({ path: '__graph__', content: '', sha: null, isDirty: false });
+  pane.activeIdx = pane.tabs.length - 1;
+  renderTabBar(pane);
+  renderPaneContent(pane);
+}
+
 // ── TREE UTILS ───────────────────────────────────────────
 
 function findPane(id) {
   function walk(node) {
     if (!node) return null;
     if (node.type === 'pane' && node.id == id) return node;
-    if (node.type === 'split') {
-      return walk(node.children[0]) || walk(node.children[1]);
-    }
+    if (node.type === 'split') return walk(node.children[0]) || walk(node.children[1]);
     return null;
   }
   return walk(_root);
@@ -593,9 +614,7 @@ function findParent(id) {
   function walk(node, parent) {
     if (!node) return null;
     if (node.id == id) return parent;
-    if (node.type === 'split') {
-      return walk(node.children[0], node) || walk(node.children[1], node);
-    }
+    if (node.type === 'split') return walk(node.children[0], node) || walk(node.children[1], node);
     return null;
   }
   return walk(_root, null);
@@ -618,42 +637,11 @@ function firstPaneIn(node) {
   return firstPaneIn(node.children[0]);
 }
 
-// ── GETTERS PUBLICS ──────────────────────────────────────
+// ── GETTERS ──────────────────────────────────────────────
 
 export function getActivePane() { return findPane(_activePaneId); }
 export function getActivePaneId() { return _activePaneId; }
-
-export function getDirtyTabs() {
-  return allPanes().flatMap(p => p.tabs.filter(t => t.isDirty));
-}
-
+export function getDirtyTabs() { return allPanes().flatMap(p => p.tabs.filter(t => t.isDirty && t.path !== '__graph__')); }
 export function updateTabSha(path, sha) {
-  allPanes().forEach(p => {
-    const tab = p.tabs.find(t => t.path === path);
-    if (tab) tab.sha = sha;
-  });
-}
-
-export function openGraphInPane(paneId) {
-  const pane = findPane(paneId || _activePaneId);
-  if (!pane) return;
-  const existing = pane.tabs.findIndex(t => t.path === '__graph__');
-  if (existing !== -1) { pane.activeIdx = existing; renderPane(pane.id); return; }
-  pane.tabs.push({ path: '__graph__', content: '', sha: null, isDirty: false });
-  pane.activeIdx = pane.tabs.length - 1;
-  renderPane(pane.id);
-  // Re-init le canvas graph
-  setTimeout(() => {
-    const canvas = _container.querySelector(`.layout-graph-canvas[data-pane="${pane.id}"]`);
-    emit('graph:mount', { paneId: pane.id, canvas });
-  }, 100);
-}
-
-// ── UTILS ────────────────────────────────────────────────
-
-function escHtml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  allPanes().forEach(p => { const t = p.tabs.find(t => t.path === path); if (t) t.sha = sha; });
 }
