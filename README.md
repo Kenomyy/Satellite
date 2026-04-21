@@ -1,2 +1,2 @@
-# satellite-
-Markdown Note Taking
+# Satellite
+Web Based markdown note taking
