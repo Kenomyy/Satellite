@@ -100,39 +100,32 @@
           </div>
           <button class="btn-mono" id="btn-pull">PULL</button>
           <button class="btn-mono" id="btn-push">PUSH</button>
-          <button class="icon-btn" id="btn-preview-toggle" title="Toggle preview (Ctrl+E)">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>
+          <button class="icon-btn" id="btn-graph" title="Open graph view">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2"/><circle cx="2" cy="4" r="1.5"/><circle cx="14" cy="4" r="1.5"/><circle cx="2" cy="12" r="1.5"/><circle cx="14" cy="12" r="1.5"/><line x1="3.5" y1="4.5" x2="6.5" y2="7"/><line x1="12.5" y1="4.5" x2="9.5" y2="7"/><line x1="3.5" y1="11.5" x2="6.5" y2="9"/><line x1="12.5" y1="11.5" x2="9.5" y2="9"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-settings" title="Settings">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
           </button>
         </div>
       </div>
 
-      <!-- EDITOR AREA -->
-      <div class="editor-area" id="editor-area">
+      <!-- LAYOUT ENGINE -->
+      <div id="layout-root" class="layout-root"></div>
 
-        <!-- EMPTY STATE -->
-        <div id="empty-state" class="empty-state">
-          <div class="empty-logo">SATELLITE</div>
-          <div class="empty-hint">Select a file to start editing</div>
-          <div class="empty-shortcuts">
-            <span class="shortcut"><kbd>Ctrl</kbd><kbd>E</kbd> Preview</span>
-            <span class="shortcut"><kbd>Ctrl</kbd><kbd>K</kbd> Search</span>
-            <span class="shortcut"><kbd>Ctrl</kbd><kbd>N</kbd> New file</span>
-          </div>
-        </div>
-
-        <!-- EDITOR -->
-        <div id="editor-container" class="editor-container hidden">
-          <textarea id="editor" class="editor" spellcheck="false"></textarea>
-          <div id="preview" class="preview hidden"></div>
-        </div>
-
-        <!-- BACKLINKS -->
-        <div id="backlinks-panel" class="backlinks-panel hidden">
-          <div class="backlinks-title">BACKLINKS</div>
-          <div id="backlinks-list" class="backlinks-list"></div>
-        </div>
-
+      <!-- BACKLINKS (global, en bas) -->
+      <div id="backlinks-panel" class="backlinks-panel hidden">
+        <div class="backlinks-title">BACKLINKS</div>
+        <div id="backlinks-list" class="backlinks-list"></div>
       </div>
+
+      <!-- EDITOR / PREVIEW cachés (utilisés par editor.js pour les modules qui en ont besoin) -->
+      <div style="display:none">
+        <textarea id="editor"></textarea>
+        <div id="preview"></div>
+        <div id="editor-container"></div>
+        <div id="empty-state"></div>
+      </div>
+
     </main>
   </div>
 

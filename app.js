@@ -8,7 +8,7 @@ import * as Backlinks from './modules/backlinks.js';
 import * as Graph from './modules/graph.js';
 import * as Templates from './modules/templates.js';
 import * as Conflicts from './modules/conflicts.js';
-import * as Tabs from './modules/tabs.js';
+import * as Layout from './modules/layout.js';
 
 // ─── STATE ───────────────────────────────────────────────
 
@@ -93,7 +93,8 @@ function showApp() {
   Backlinks.init();
   Graph.init();
   Conflicts.init();
-  Tabs.init();
+  const layoutContainer = document.getElementById('layout-root');
+  Layout.init(layoutContainer);
   Templates.init(state.settings.templatesFolder);
 
   setupSidebar();
@@ -156,20 +157,17 @@ async function indexVault(tree) {
 
 function setupFileOps() {
 
-  // Ouvre un fichier (newTab = true si clic molette)
-  on('file:open', async ({ path, sha, newTab }) => {
+  // Ouvre un fichier
+  on('file:open', async ({ path, newTab, paneId }) => {
     setSyncStatus('syncing', 'Loading…');
-
     try {
       let cached = state.fileCache.get(path);
-
       if (!cached) {
         const fetched = await GitHub.fetchFile(path);
         cached = fetched;
         state.fileCache.set(path, cached);
       }
-
-      Tabs.openTab(path, cached.content, cached.sha, !!newTab);
+      Layout.openInPane(paneId || Layout.getActivePaneId(), path, cached.content, cached.sha, !!newTab);
       setSyncStatus('ok', syncLabel());
     } catch (err) {
       setSyncStatus('error', 'Load failed');
@@ -177,19 +175,11 @@ function setupFileOps() {
     }
   });
 
-  // Activation d'un onglet → charge dans l'éditeur
-  on('tab:activate', ({ path, content, sha }) => {
-    emit('file:opened', { path, content, sha });
+  // Onglet activé → met à jour breadcrumb + explorer
+  on('pane:tab-activated', ({ path, content, sha }) => {
     updateBreadcrumb(path);
     emit('explorer:highlight', { path });
-  });
-
-  // Plus d'onglets ouverts → empty state
-  on('tabs:empty', () => {
-    document.getElementById('editor-container').classList.add('hidden');
-    document.getElementById('empty-state').classList.remove('hidden');
-    document.getElementById('backlinks-panel').classList.add('hidden');
-    document.getElementById('breadcrumb').textContent = '';
+    emit('file:opened', { path, content, sha });
   });
 
   // Ouvre par nom (depuis un [[lien]])
@@ -473,7 +463,7 @@ async function pushAllChanges(message) {
 
   try {
     // Ajoute tous les onglets dirty
-    const dirtyTabs = Tabs.getDirtyTabs();
+    const dirtyTabs = Layout.getDirtyTabs();
     for (const tab of dirtyTabs) {
       state.dirtyFiles.set(tab.path, tab.content);
     }
@@ -521,6 +511,7 @@ async function pushAllChanges(message) {
       const { sha } = await GitHub.fetchFile(path);
       const cached = state.fileCache.get(path);
       if (cached) cached.sha = sha;
+      Layout.updateTabSha(path, sha);
       if (path === Editor.getCurrentPath()) Editor.updateSha(sha);
     }
 
@@ -563,6 +554,10 @@ function setupSidebar() {
   // Boutons header
   document.getElementById('btn-new-file')?.addEventListener('click', () => {
     emit('file:new-request', { folder: '' });
+  });
+
+  document.getElementById('btn-graph')?.addEventListener('click', () => {
+    Layout.openGraphInPane(Layout.getActivePaneId());
   });
 
   document.getElementById('btn-settings')?.addEventListener('click', () => {

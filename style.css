@@ -998,3 +998,261 @@ kbd {
   color: var(--text-primary);
   background: var(--bg-surface);
 }
+
+/* ── LAYOUT ENGINE ──────────────────────────────────────── */
+
+.layout-root {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+.layout-split {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.layout-split-horizontal { flex-direction: column; }
+.layout-split-vertical { flex-direction: row; }
+
+.layout-split-child {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.layout-resize-handle {
+  flex-shrink: 0;
+  background: var(--border);
+  transition: background 0.15s;
+  z-index: 10;
+}
+
+.layout-resize-v {
+  width: 3px;
+  cursor: col-resize;
+}
+
+.layout-resize-h {
+  height: 3px;
+  cursor: row-resize;
+}
+
+.layout-resize-handle:hover,
+.layout-resize-handle:active {
+  background: var(--accent);
+}
+
+/* ── PANE ───────────────────────────────────────────────── */
+
+.layout-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  border: 0.5px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.layout-pane.active {
+  border-color: var(--border);
+}
+
+/* ── PANE TAB BAR ───────────────────────────────────────── */
+
+.layout-tab-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-elevated);
+  border-bottom: 0.5px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  scrollbar-width: none;
+  min-height: 36px;
+}
+
+.layout-tab-bar::-webkit-scrollbar { display: none; }
+
+.layout-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 36px;
+  border-right: 0.5px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-body);
+  transition: background 0.1s, color 0.1s;
+  max-width: 180px;
+  user-select: none;
+}
+
+.layout-tab:hover { background: var(--bg-surface); color: var(--text-primary); }
+.layout-tab.active { background: var(--bg-base); color: var(--text-primary); border-bottom: 1px solid var(--accent); }
+
+.layout-tab[draggable="true"] { cursor: grab; }
+.layout-tab[draggable="true"]:active { cursor: grabbing; }
+
+.layout-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layout-tab-close {
+  background: transparent;
+  border: none;
+  color: var(--text-disabled);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 3px;
+  border-radius: 3px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.1s, background 0.1s;
+}
+
+.layout-tab-close:hover { color: var(--text-primary); background: var(--bg-surface); }
+
+.layout-tab-empty {
+  font-size: 11px;
+  color: var(--text-disabled);
+  padding: 0 12px;
+  font-family: var(--font-body);
+}
+
+.layout-pane-actions {
+  margin-left: auto;
+  display: flex;
+  padding: 0 6px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.layout-split-btn {
+  background: transparent;
+  border: 0.5px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-disabled);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+.layout-split-btn:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+
+/* ── PANE CONTENT ───────────────────────────────────────── */
+
+.layout-pane-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.layout-editor {
+  flex: 1;
+  background: var(--bg-base);
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.8;
+  outline: none;
+  padding: 2rem 3rem;
+  resize: none;
+  tab-size: 2;
+}
+
+.layout-preview {
+  flex: 1;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.8;
+  overflow-y: auto;
+  padding: 2rem 3rem;
+}
+
+.layout-preview h1, .layout-preview h2, .layout-preview h3 {
+  font-family: var(--font-ui);
+  letter-spacing: 0.1em;
+  margin: 1.5em 0 0.5em;
+}
+.layout-preview h1 { font-size: 20px; }
+.layout-preview h2 { font-size: 16px; }
+.layout-preview h3 { font-size: 13px; color: var(--text-secondary); }
+.layout-preview p { margin: 0.75em 0; color: var(--text-secondary); }
+.layout-preview a { color: var(--accent); text-decoration: none; }
+.layout-preview code {
+  font-family: var(--font-mono); font-size: 12px;
+  background: var(--bg-surface); border: 0.5px solid var(--border);
+  border-radius: 3px; padding: 1px 5px; color: var(--accent);
+}
+.layout-preview pre {
+  background: var(--bg-surface); border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm); padding: 1rem; overflow-x: auto; margin: 1em 0;
+}
+.layout-preview pre code { background: none; border: none; padding: 0; color: var(--text-primary); }
+.layout-preview blockquote { border-left: 2px solid var(--accent); margin: 1em 0; padding: 0.5em 1em; color: var(--text-secondary); }
+.layout-preview ul, .layout-preview ol { padding-left: 1.5em; color: var(--text-secondary); }
+.layout-preview img { max-width: 100%; border-radius: var(--radius-sm); }
+.layout-preview .ob-link { color: var(--accent); cursor: pointer; border-bottom: 0.5px solid var(--text-disabled); }
+.layout-preview .ob-link:hover { border-bottom-color: var(--accent); }
+.layout-preview .ob-tag { font-family: var(--font-mono); font-size: 11px; color: var(--accent); opacity: 0.7; }
+
+.layout-graph-canvas { width: 100%; height: 100%; }
+
+.layout-empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-disabled);
+  font-family: var(--font-body);
+}
+
+/* ── DROP ZONES ─────────────────────────────────────────── */
+
+.layout-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.layout-drop-overlay:not(.hidden) { pointer-events: all; }
+
+.layout-drop-zone {
+  position: absolute;
+  background: rgba(232, 232, 240, 0.04);
+  border: 1px dashed var(--text-disabled);
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.layout-drop-zone.hover {
+  background: rgba(232, 232, 240, 0.1);
+  border-color: var(--accent);
+}
+
+.layout-drop-center { inset: 25%; }
+.layout-drop-top    { top: 0; left: 0; right: 0; height: 25%; }
+.layout-drop-bottom { bottom: 0; left: 0; right: 0; height: 25%; }
+.layout-drop-left   { top: 0; bottom: 0; left: 0; width: 25%; }
+.layout-drop-right  { top: 0; bottom: 0; right: 0; width: 25%; }
