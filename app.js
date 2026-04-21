@@ -156,9 +156,16 @@ function setupFileOps() {
 
   // Ouvre un fichier
   on('file:open', async ({ path, sha }) => {
+    // Sauvegarde silencieuse en memoire avant de changer de note
     if (Editor.isDirty()) {
-      const ok = confirm('You have unsaved changes. Discard them?');
-      if (!ok) return;
+      const currentPath = Editor.getCurrentPath();
+      const currentContent = Editor.getContent();
+      if (currentPath) {
+        const cached = state.fileCache.get(currentPath);
+        state.fileCache.set(currentPath, { content: currentContent, sha: cached?.sha });
+        state.dirtyFiles.set(currentPath, currentContent);
+        Editor.clearDirty();
+      }
     }
 
     setSyncStatus('syncing', 'Loading…');
@@ -184,10 +191,18 @@ function setupFileOps() {
   // Ouvre par nom (depuis un [[lien]])
   on('file:open-by-name', ({ name }) => {
     const files = Explorer.flatFiles(state.tree);
-    const match = files.find(f => {
-      const fname = f.path.split('/').pop().replace(/\.md$/, '');
-      return fname.toLowerCase() === name.toLowerCase();
+    const needle = name.toLowerCase().trim();
+    // Cherche d'abord correspondance exacte, puis partielle
+    let match = files.find(f => {
+      const fname = f.path.split('/').pop().replace(/\.md$/, '').toLowerCase();
+      return fname === needle;
     });
+    if (!match) {
+      match = files.find(f => {
+        const fname = f.path.split('/').pop().replace(/\.md$/, '').toLowerCase();
+        return fname.includes(needle) || needle.includes(fname);
+      });
+    }
     if (match) emit('file:open', { path: match.path });
   });
 
