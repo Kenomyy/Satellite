@@ -9,7 +9,6 @@ import * as Graph from './modules/graph.js';
 import * as Templates from './modules/templates.js';
 import * as Conflicts from './modules/conflicts.js';
 import * as Layout from './modules/layout.js';
-import * as Graph from './modules/graph.js';
 
 // ─── STATE ───────────────────────────────────────────────
 
