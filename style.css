@@ -1189,14 +1189,10 @@ kbd {
   padding: 2rem 3rem;
 }
 
-.layout-preview h1, .layout-preview h2, .layout-preview h3 {
+.layout-preview h1, .layout-preview h2, .layout-preview h3, .layout-preview h4 {
   font-family: var(--font-ui);
-  letter-spacing: 0.1em;
-  margin: 1.5em 0 0.5em;
+  margin-top: 1.5em;
 }
-.layout-preview h1 { font-size: 20px; }
-.layout-preview h2 { font-size: 16px; }
-.layout-preview h3 { font-size: 13px; color: var(--text-secondary); }
 .layout-preview p { margin: 0.75em 0; color: var(--text-secondary); }
 .layout-preview a { color: var(--accent); text-decoration: none; }
 .layout-preview code {

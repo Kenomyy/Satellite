@@ -167,14 +167,18 @@ function removePane(paneId) {
     grandParent.children[parentIdx] = sibling;
   }
 
+  // Trouve le premier pane dispo AVANT le render
   const firstPane = firstPaneIn(sibling);
-  if (firstPane) {
-    _activePaneId = firstPane.id;
-  }
+  if (firstPane) _activePaneId = firstPane.id;
 
   render();
 
-  if (firstPane) emitActivate(firstPane);
+  // Après render, émet l'activation du nouveau pane actif
+  if (firstPane && firstPane.tabs.length > 0) {
+    emitActivate(firstPane);
+  } else if (firstPane) {
+    emit('pane:empty', { paneId: firstPane.id });
+  }
 }
 
 // ── RENDER FULL ──────────────────────────────────────────
@@ -380,7 +384,8 @@ function showPreview(editor, preview, pane, btn) {
 }
 
 function togglePreview(editor, preview, pane, btn) {
-  const isPreview = !editor.classList.contains('hidden') === false;
+  // isPreview = true si l'editor est caché (on est en mode preview)
+  const isPreview = editor.classList.contains('hidden');
   if (isPreview) {
     // Retour edit
     preview.classList.add('hidden');
@@ -857,7 +862,7 @@ function firstPaneIn(node) {
 }
 
 function escHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ── GETTERS ──────────────────────────────────────────────

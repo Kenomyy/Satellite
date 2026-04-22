@@ -299,6 +299,8 @@ function setupInteraction() {
 
   // Drag noeud
   _canvas.addEventListener('mousedown', (e) => {
+    _mouseDownX = e.offsetX;
+    _mouseDownY = e.offsetY;
     const { wx, wy } = screenToWorld(e.offsetX, e.offsetY);
     const hit = hitTest(wx, wy);
 
@@ -331,17 +333,18 @@ function setupInteraction() {
     }
   });
 
+  let _mouseDownX = 0, _mouseDownY = 0;
+
   _canvas.addEventListener('mouseup', (e) => {
     if (_dragging) {
-      // Click sans drag → ouvre la note
-      const { wx, wy } = screenToWorld(e.offsetX, e.offsetY);
-      const dist = Math.sqrt(
-        Math.pow(wx + _offsetX - _dragging.x, 2) +
-        Math.pow(wy + _offsetY - _dragging.y, 2)
-      );
-      if (dist < 3) {
+      // Clic simple = pas de mouvement (< 4px) → ouvre la note
+      const dx = e.offsetX - _mouseDownX;
+      const dy = e.offsetY - _mouseDownY;
+      const moved = Math.sqrt(dx*dx + dy*dy);
+      if (moved < 4) {
         emit('file:open', { path: _dragging.path });
       }
+      // Si drag → on ne fait rien, juste repositionne le node
     }
     _dragging = null;
     _isPanning = false;

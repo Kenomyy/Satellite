@@ -325,6 +325,47 @@ function showNewFileModal(folder) {
   input.addEventListener('keydown', handleKey);
 }
 
+function showNewFolderModal() {
+  const modal = document.getElementById('newfile-modal');
+  const input = document.getElementById('newfile-input');
+  const confirmBtn = document.getElementById('newfile-confirm');
+  const cancelBtn = document.getElementById('newfile-cancel');
+  const title = modal.querySelector('.modal-title');
+  if (title) title.textContent = 'NEW FOLDER';
+  input.value = '';
+  input.placeholder = 'folder-name';
+  modal.classList.remove('hidden');
+  input.focus();
+
+  const handleConfirm = async () => {
+    const name = input.value.trim();
+    if (!name) return;
+    cleanup();
+    // GitHub ne peut pas créer un dossier vide — on crée un .gitkeep dedans
+    await createFile(`${name}/.gitkeep`, '');
+    if (title) title.textContent = 'NEW FILE';
+    input.placeholder = 'filename.md';
+  };
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter') handleConfirm();
+    if (e.key === 'Escape') cleanup();
+  };
+
+  const cleanup = () => {
+    modal.classList.add('hidden');
+    if (title) title.textContent = 'NEW FILE';
+    input.placeholder = 'filename.md';
+    confirmBtn.removeEventListener('click', handleConfirm);
+    cancelBtn.removeEventListener('click', cleanup);
+    input.removeEventListener('keydown', handleKey);
+  };
+
+  confirmBtn.addEventListener('click', handleConfirm);
+  cancelBtn.addEventListener('click', cleanup);
+  input.addEventListener('keydown', handleKey);
+}
+
 async function createFile(path, content) {
   try {
     setSyncStatus('syncing', 'Creating…');
@@ -562,6 +603,10 @@ function setupSidebar() {
     emit('file:new-request', { folder: '' });
   });
 
+  document.getElementById('btn-new-folder')?.addEventListener('click', () => {
+    showNewFolderModal();
+  });
+
   document.getElementById('btn-graph')?.addEventListener('click', () => {
     Layout.openGraphInPane(Layout.getActivePaneId());
   });
@@ -642,21 +687,33 @@ function resolveAttachment(filename) {
   resolveAttachmentImg(filename, null);
 }
 
-function resolveAttachmentImg(filename, targetImg) {
-  const { repo, branch } = state.settings;
+async function resolveAttachmentImg(filename, targetImg) {
+  const { repo, branch, token } = state.settings;
   const folder = state.settings.attachmentsFolder || 'source';
-  const token = state.settings.token;
 
-  const candidates = [
-    `https://raw.githubusercontent.com/${repo}/${branch}/${folder}/${encodeURIComponent(filename)}`,
-    `https://raw.githubusercontent.com/${repo}/${branch}/${encodeURIComponent(filename)}`,
+  // Essaie de charger via l'API GitHub (supporte les repos privés)
+  const paths = [
+    `${folder}/${filename}`,
+    filename,
   ];
 
-  const apply = (img) => {
-    img.src = candidates[0];
-    img.onerror = () => { img.src = candidates[1]; };
-    img.style.maxWidth = '100%';
-    img.style.borderRadius = '4px';
+  const apply = async (img) => {
+    for (const p of paths) {
+      try {
+        const res = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(p)}?ref=${branch}`, {
+          headers: { 'Authorization': `token ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          img.src = `data:image/*;base64,${data.content.replace(/\n/g, '')}`;
+          img.style.maxWidth = '100%';
+          img.style.borderRadius = '4px';
+          return;
+        }
+      } catch {}
+    }
+    // Fallback raw URL
+    img.src = `https://raw.githubusercontent.com/${repo}/${branch}/${folder}/${encodeURIComponent(filename)}`;
   };
 
   if (targetImg) {
