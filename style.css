@@ -295,8 +295,8 @@ html, body {
   color: var(--text-secondary);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 9px;
-  letter-spacing: 0.12em;
+  font-size: 11px;
+  letter-spacing: 0.1em;
   padding: 8px 4px;
   transition: color 0.15s;
 }
@@ -333,9 +333,9 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
+  padding: 5px 12px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary);
   border-radius: 0;
   transition: background 0.1s, color 0.1s;
@@ -372,8 +372,8 @@ html, body {
 
 .explorer-folder-name {
   font-family: var(--font-ui);
-  font-size: 9px;
-  letter-spacing: 0.1em;
+  font-size: 12px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
@@ -1254,3 +1254,102 @@ kbd {
 .layout-drop-bottom { bottom: 0; left: 0; right: 0; height: 25%; }
 .layout-drop-left   { top: 0; bottom: 0; left: 0; width: 25%; }
 .layout-drop-right  { top: 0; bottom: 0; right: 0; width: 25%; }
+
+/* ── DOTS ONGLETS ───────────────────────────────────────── */
+.tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: box-shadow 0.2s, background 0.2s;
+}
+
+.tab-dot.dirty {
+  background: #E8503A;
+  box-shadow: 0 0 6px 1px rgba(232, 80, 58, 0.7);
+}
+
+.tab-dot.saved {
+  background: #2ECC71;
+  box-shadow: 0 0 6px 1px rgba(46, 204, 113, 0.6);
+}
+
+/* ── LAYOUT TABS ────────────────────────────────────────── */
+.layout-tab {
+  font-size: 13px;
+}
+
+.layout-tab-name {
+  font-size: 13px;
+}
+
+/* ── READABLE WIDTH ─────────────────────────────────────── */
+.layout-editor-wrap {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.layout-editor-wrap[data-readable="true"] .layout-editor,
+.layout-editor-wrap[data-readable="true"] .layout-preview {
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.layout-editor-wrap[data-readable="true"] {
+  overflow-y: auto;
+  justify-content: center;
+}
+
+/* ── ACTION BTN PREVIEW ─────────────────────────────────── */
+.layout-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-disabled);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.layout-action-btn:hover { color: var(--text-primary); }
+.layout-action-btn svg { width: 13px; height: 13px; }
+
+/* ── AUTOCOMPLETE ───────────────────────────────────────── */
+.autocomplete-dropdown {
+  position: fixed;
+  background: var(--bg-elevated);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  min-width: 180px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+.autocomplete-dropdown.hidden { display: none; }
+
+.autocomplete-item {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+/* ── MARKDOWN TITRES ────────────────────────────────────── */
+.layout-preview h1 { font-size: 26px; font-weight: 700; letter-spacing: 0.05em; margin: 1.5em 0 0.5em; }
+.layout-preview h2 { font-size: 20px; font-weight: 500; letter-spacing: 0.05em; margin: 1.2em 0 0.4em; }
+.layout-preview h3 { font-size: 16px; font-weight: 500; color: var(--text-secondary); margin: 1em 0 0.3em; }
+.layout-preview h4 { font-size: 14px; font-weight: 500; color: var(--text-secondary); margin: 0.8em 0 0.2em; }

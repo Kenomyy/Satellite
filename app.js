@@ -9,6 +9,7 @@ import * as Graph from './modules/graph.js';
 import * as Templates from './modules/templates.js';
 import * as Conflicts from './modules/conflicts.js';
 import * as Layout from './modules/layout.js';
+import * as Graph from './modules/graph.js';
 
 // ─── STATE ───────────────────────────────────────────────
 
@@ -150,6 +151,9 @@ async function indexVault(tree) {
 
   Search.buildIndex(indexed);
   Backlinks.buildIndex(indexed);
+  // Fichiers dispo pour autocomplete liens
+  const fileNames = indexed.filter(f => f.path.endsWith('.md')).map(f => f.path.split('/').pop().replace(/\.md$/, ''));
+  Layout.setVaultFiles(fileNames);
   emit('vault:indexed', { files: indexed, tree: state.tree });
 }
 
@@ -267,8 +271,8 @@ function setupFileOps() {
   });
 
   // Résolution d'image Obsidian
-  on('attachment:resolve', ({ filename }) => {
-    resolveAttachment(filename);
+  on('attachment:resolve', ({ filename, img }) => {
+    resolveAttachmentImg(filename, img);
   });
 }
 
@@ -426,10 +430,13 @@ function showCommitModal() {
   const cancelBtn = document.getElementById('commit-cancel');
 
   // Message par défaut
-  const count = state.dirtyFiles.size + (Editor.isDirty() ? 1 : 0);
-  input.value = count === 1
-    ? `Update ${Editor.getCurrentPath()?.split('/').pop() || 'note'}`
-    : `Update ${count} notes`;
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2,'0');
+  const mm = String(now.getMonth()+1).padStart(2,'0');
+  const yy = String(now.getFullYear()).slice(-2);
+  const hh = String(now.getHours()).padStart(2,'0');
+  const min = String(now.getMinutes()).padStart(2,'0');
+  input.value = `${dd}/${mm}/${yy}.${hh}:${min}`;
 
   modal.classList.remove('hidden');
   input.focus();
@@ -587,7 +594,12 @@ function setupSettings() {
     const templatesFolder = document.getElementById('settings-templates-folder')?.value.trim() || 'templates';
     const attachmentsFolder = document.getElementById('settings-attachments-folder')?.value.trim() || 'source';
 
-    saveSettings({ ...state.settings, accentColor: accent, templatesFolder, attachmentsFolder });
+    const readableWidth = document.getElementById('settings-readable-width')?.checked || false;
+    saveSettings({ ...state.settings, accentColor: accent, templatesFolder, attachmentsFolder, readableWidth });
+    // Applique readable width
+    document.querySelectorAll('.layout-editor-wrap').forEach(el => {
+      el.dataset.readable = readableWidth ? 'true' : 'false';
+    });
     state.settings = loadSettings();
 
     emit('settings:updated', state.settings);
@@ -614,6 +626,8 @@ function showSettingsModal() {
     picker.value = state.settings.accentColor || '#E8E8F0';
     if (pickerVal) pickerVal.textContent = picker.value.toUpperCase();
   }
+  const rwCheck = document.getElementById('settings-readable-width');
+  if (rwCheck) rwCheck.checked = state.settings.readableWidth || false;
 
   const tf = document.getElementById('settings-templates-folder');
   const af = document.getElementById('settings-attachments-folder');
@@ -626,23 +640,33 @@ function showSettingsModal() {
 // ─── ATTACHMENTS ─────────────────────────────────────────
 
 function resolveAttachment(filename) {
-  // Construit l'URL raw GitHub pour les images
+  resolveAttachmentImg(filename, null);
+}
+
+function resolveAttachmentImg(filename, targetImg) {
   const { repo, branch } = state.settings;
   const folder = state.settings.attachmentsFolder || 'source';
+  const token = state.settings.token;
 
-  // Cherche d'abord dans le dossier attachments, sinon vault root
   const candidates = [
-    `https://raw.githubusercontent.com/${repo}/${branch}/${folder}/${filename}`,
-    `https://raw.githubusercontent.com/${repo}/${branch}/${filename}`,
+    `https://raw.githubusercontent.com/${repo}/${branch}/${folder}/${encodeURIComponent(filename)}`,
+    `https://raw.githubusercontent.com/${repo}/${branch}/${encodeURIComponent(filename)}`,
   ];
 
-  // Remplace les src placeholder dans le preview
-  setTimeout(() => {
-    document.querySelectorAll(`img[src="attachment://${filename}"]`).forEach(img => {
-      img.src = candidates[0];
-      img.onerror = () => { img.src = candidates[1]; };
-    });
-  }, 50);
+  const apply = (img) => {
+    img.src = candidates[0];
+    img.onerror = () => { img.src = candidates[1]; };
+    img.style.maxWidth = '100%';
+    img.style.borderRadius = '4px';
+  };
+
+  if (targetImg) {
+    apply(targetImg);
+  } else {
+    setTimeout(() => {
+      document.querySelectorAll(`img[src="attachment://${filename}"]`).forEach(apply);
+    }, 50);
+  }
 }
 
 // ─── SYNC STATUS ─────────────────────────────────────────
