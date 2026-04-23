@@ -1189,10 +1189,6 @@ kbd {
   padding: 2rem 3rem;
 }
 
-.layout-preview h1, .layout-preview h2, .layout-preview h3, .layout-preview h4 {
-  font-family: var(--font-ui);
-  margin-top: 1.5em;
-}
 .layout-preview p { margin: 0.75em 0; color: var(--text-secondary); }
 .layout-preview a { color: var(--accent); text-decoration: none; }
 .layout-preview code {
@@ -1345,7 +1341,37 @@ kbd {
 }
 
 /* ── MARKDOWN TITRES ────────────────────────────────────── */
-.layout-preview h1 { font-size: 26px; font-weight: 700; letter-spacing: 0.05em; margin: 1.5em 0 0.5em; }
-.layout-preview h2 { font-size: 20px; font-weight: 500; letter-spacing: 0.05em; margin: 1.2em 0 0.4em; }
-.layout-preview h3 { font-size: 16px; font-weight: 500; color: var(--text-secondary); margin: 1em 0 0.3em; }
-.layout-preview h4 { font-size: 14px; font-weight: 500; color: var(--text-secondary); margin: 0.8em 0 0.2em; }
+
+/* ── TITRES MARKDOWN ─────────────────────────────────────── */
+.layout-preview h1 {
+  font-family: var(--font-ui);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+  margin: 1.5em 0 0.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 0.5px solid var(--border);
+}
+.layout-preview h2 {
+  font-family: var(--font-ui);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+  margin: 1.2em 0 0.4em;
+}
+.layout-preview h3 {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  margin: 1em 0 0.3em;
+}
+.layout-preview h4 {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin: 0.8em 0 0.2em;
+}

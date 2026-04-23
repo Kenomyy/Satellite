@@ -203,13 +203,17 @@ function setupFileOps() {
     if (match) emit('file:open', { path: match.path });
   });
 
-  // Sauvegarde locale (Ctrl+S)
-  on('file:save', async ({ path, content, sha }) => {
+  // Sauvegarde locale (Ctrl+S) — sauvegarde en mémoire uniquement, pas sur GitHub
+  on('file:save', async ({ path, content }) => {
     const cached = state.fileCache.get(path);
+    // Met à jour le cache local
     state.fileCache.set(path, { content, sha: cached?.sha });
+    // Marque comme "à pusher" mais pas "unsaved" UI
     state.dirtyFiles.set(path, content);
+    // Notifie le layout de passer le dot en vert
     emit('file:saved-silent', { path, content, sha: cached?.sha });
-    setSyncStatus('ok', `${state.dirtyFiles.size} unsaved`);
+    const count = state.dirtyFiles.size;
+    setSyncStatus('ok', count > 0 ? `${count} to push` : syncLabel());
   });
 
   // Mise à jour de l'index quand l'éditeur change
@@ -459,51 +463,16 @@ function setupSync() {
 
   // Push
   document.getElementById('btn-push')?.addEventListener('click', () => {
-    showCommitModal();
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2,'0');
+    const mm = String(now.getMonth()+1).padStart(2,'0');
+    const yy = String(now.getFullYear()).slice(-2);
+    const hh = String(now.getHours()).padStart(2,'0');
+    const min = String(now.getMinutes()).padStart(2,'0');
+    pushAllChanges(`${dd}/${mm}/${yy}.${hh}:${min}`);
   });
 }
 
-function showCommitModal() {
-  const modal = document.getElementById('commit-modal');
-  const input = document.getElementById('commit-message');
-  const confirmBtn = document.getElementById('commit-confirm');
-  const cancelBtn = document.getElementById('commit-cancel');
-
-  // Message par défaut
-  const now = new Date();
-  const dd = String(now.getDate()).padStart(2,'0');
-  const mm = String(now.getMonth()+1).padStart(2,'0');
-  const yy = String(now.getFullYear()).slice(-2);
-  const hh = String(now.getHours()).padStart(2,'0');
-  const min = String(now.getMinutes()).padStart(2,'0');
-  input.value = `${dd}/${mm}/${yy}.${hh}:${min}`;
-
-  modal.classList.remove('hidden');
-  input.focus();
-  input.select();
-
-  const handleConfirm = async () => {
-    const message = input.value.trim() || 'Update notes';
-    cleanup();
-    await pushAllChanges(message);
-  };
-
-  const handleKey = (e) => {
-    if (e.key === 'Enter') handleConfirm();
-    if (e.key === 'Escape') cleanup();
-  };
-
-  const cleanup = () => {
-    modal.classList.add('hidden');
-    confirmBtn.removeEventListener('click', handleConfirm);
-    cancelBtn.removeEventListener('click', cleanup);
-    input.removeEventListener('keydown', handleKey);
-  };
-
-  confirmBtn.addEventListener('click', handleConfirm);
-  cancelBtn.addEventListener('click', cleanup);
-  input.addEventListener('keydown', handleKey);
-}
 
 async function pushAllChanges(message) {
   setSyncStatus('syncing', 'Pushing…');

@@ -50,8 +50,14 @@ function makeSplit(direction, ratio, a, b) {
 // ── OPEN IN PANE ─────────────────────────────────────────
 
 export function openInPane(paneId, path, content, sha, inNewTab = false) {
-  const pane = findPane(paneId);
-  if (!pane) return;
+  let pane = findPane(paneId);
+  // Fallback : si le pane demandé n'existe plus, prend le premier dispo
+  if (!pane) {
+    const all = allPanes();
+    if (!all.length) return;
+    pane = all[0];
+    _activePaneId = pane.id;
+  }
 
   const existing = pane.tabs.findIndex(t => t.path === path);
   if (existing !== -1) {
@@ -168,16 +174,20 @@ function removePane(paneId) {
   }
 
   // Trouve le premier pane dispo AVANT le render
-  const firstPane = firstPaneIn(sibling);
+  const firstPane = firstPaneIn(sibling) || firstPaneIn(_root);
   if (firstPane) _activePaneId = firstPane.id;
+  else _activePaneId = null;
 
   render();
 
   // Après render, émet l'activation du nouveau pane actif
   if (firstPane && firstPane.tabs.length > 0) {
-    emitActivate(firstPane);
-  } else if (firstPane) {
-    emit('pane:empty', { paneId: firstPane.id });
+    emit('pane:tab-activated', {
+      paneId: firstPane.id,
+      path: firstPane.tabs[firstPane.activeIdx].path,
+      content: firstPane.tabs[firstPane.activeIdx].content,
+      sha: firstPane.tabs[firstPane.activeIdx].sha,
+    });
   }
 }
 
@@ -372,7 +382,14 @@ function showPreview(editor, preview, pane, btn) {
   preview.querySelectorAll('.ob-link').forEach(a => {
     a.addEventListener('click', (e) => {
       e.preventDefault();
-      emit('file:open-by-name', { name: a.dataset.target, paneId: pane.id });
+      emit('file:open-by-name', { name: a.dataset.target, paneId: pane.id, newTab: false });
+    });
+    // Clic molette → ouvre dans un nouvel onglet
+    a.addEventListener('auxclick', (e) => {
+      if (e.button === 1) {
+        e.preventDefault();
+        emit('file:open-by-name', { name: a.dataset.target, paneId: pane.id, newTab: true });
+      }
     });
   });
 
@@ -403,19 +420,28 @@ function renderMarkdown(content) {
   const clean = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
   if (typeof marked === 'undefined') return escHtml(clean);
 
-  const withLinks = clean
-    .replace(/!\[\[([^\]]+)\]\]/g, (_, src) => {
-      const name = src.split('|')[0].trim();
-      return `<img src="attachment://${name}" alt="${name}">`;
-    })
-    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, path, alias) =>
-      `<a class="ob-link" data-target="${path}" href="#">${alias || path}</a>`
-    )
-    .replace(/(?<![\/\w])#([\w\u00C0-\u017F\/-]+)/g, (_, tag) =>
-      `<span class="ob-tag" data-tag="${tag}">#${tag}</span>`
-    );
+  // Remplace ![[img]] par markdown image standard
+  let processed = clean.replace(/!\[\[([^\]]+)\]\]/g, (_, src) => {
+    const name = src.split('|')[0].trim();
+    return '![' + name + '](attachment://' + name + ')';
+  });
 
-  return marked.parse(withLinks);
+  // Remplace [[note|alias]] et [[note]] par placeholder pour éviter que marked n'échappe le contenu
+  processed = processed.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, path, alias) => {
+    return '[[OBLINK:' + path + '|' + (alias || path) + ']]';
+  });
+
+  let html = marked.parse(processed);
+
+  // Restaure les liens internes
+  html = html.replace(/\[\[OBLINK:([^|]+)\|([^\]]+)\]\]/g, (_, path, label) => {
+    return '<a class="ob-link" data-target="' + path + '" href="#">' + label + '</a>';
+  });
+
+  // Fix apostrophes échappées par marked
+  html = html.replace(/&#39;/g, "'");
+
+  return html;
 }
 
 // ── EDITOR EVENTS ────────────────────────────────────────
