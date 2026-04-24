@@ -1340,37 +1340,39 @@ kbd {
   color: var(--text-primary);
 }
 
-/* ── MARKDOWN TITRES ────────────────────────────────────── */
 
-/* ── TITRES MARKDOWN ─────────────────────────────────────── */
+
+
+
+/* ── TITRES MARKDOWN ─── */
 .layout-preview h1 {
   font-family: var(--font-ui);
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: 0.05em;
   color: var(--text-primary);
   margin: 1.5em 0 0.5em;
-  padding-bottom: 0.3em;
+  padding-bottom: 0.25em;
   border-bottom: 0.5px solid var(--border);
 }
 .layout-preview h2 {
   font-family: var(--font-ui);
   font-size: 20px;
   font-weight: 500;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   color: var(--text-primary);
   margin: 1.2em 0 0.4em;
 }
 .layout-preview h3 {
   font-family: var(--font-ui);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 400;
   color: var(--text-secondary);
   margin: 1em 0 0.3em;
 }
 .layout-preview h4 {
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
   margin: 0.8em 0 0.2em;

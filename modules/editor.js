@@ -246,18 +246,11 @@ function setupEvents() {
     }
   });
 
-  on('file:opened', ({ path, content, sha }) => {
-    openFile(path, content, sha);
-  });
+  // file:opened est géré par layout.js — editor.js n'intervient plus ici
 }
 
 function setupShortcuts() {
   document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.key === 'e') {
-      e.preventDefault();
-      if (_currentPath) togglePreview();
-    }
-
     if (e.ctrlKey && e.key === 's') {
       e.preventDefault();
       if (_currentPath && _isDirty) {

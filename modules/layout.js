@@ -420,26 +420,35 @@ function renderMarkdown(content) {
   const clean = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
   if (typeof marked === 'undefined') return escHtml(clean);
 
-  // Remplace ![[img]] par markdown image standard
+  // Token map pour préserver les liens et images hors portée de marked
+  const tokens = {};
+  let idx = 0;
+
+  // ![[image]] → token
   let processed = clean.replace(/!\[\[([^\]]+)\]\]/g, (_, src) => {
     const name = src.split('|')[0].trim();
-    return '![' + name + '](attachment://' + name + ')';
+    const k = 'XXTOK' + (idx++) + 'XX';
+    tokens[k] = '<img src="attachment://' + name + '" alt="' + name + '" class="ob-img">';
+    return k;
   });
 
-  // Remplace [[note|alias]] et [[note]] par placeholder pour éviter que marked n'échappe le contenu
+  // [[note|alias]] et [[note]] → token
   processed = processed.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, path, alias) => {
-    return '[[OBLINK:' + path + '|' + (alias || path) + ']]';
+    const label = alias || path;
+    const k = 'XXTOK' + (idx++) + 'XX';
+    tokens[k] = '<a class="ob-link" data-target="' + path + '" href="#">' + label + '</a>';
+    return k;
   });
 
   let html = marked.parse(processed);
 
-  // Restaure les liens internes
-  html = html.replace(/\[\[OBLINK:([^|]+)\|([^\]]+)\]\]/g, (_, path, label) => {
-    return '<a class="ob-link" data-target="' + path + '" href="#">' + label + '</a>';
-  });
+  // Restaure les tokens
+  for (const [k, v] of Object.entries(tokens)) {
+    html = html.split(k).join(v);
+  }
 
-  // Fix apostrophes échappées par marked
-  html = html.replace(/&#39;/g, "'");
+  // Fix apostrophes
+  html = html.replace(/&#39;/g, "'").replace(/&amp;#39;/g, "'");
 
   return html;
 }

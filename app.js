@@ -186,10 +186,9 @@ function setupFileOps() {
   });
 
   // Ouvre par nom (depuis un [[lien]])
-  on('file:open-by-name', ({ name }) => {
+  on('file:open-by-name', ({ name, paneId, newTab }) => {
     const files = Explorer.flatFiles(state.tree);
     const needle = name.toLowerCase().trim();
-    // Cherche d'abord correspondance exacte, puis partielle
     let match = files.find(f => {
       const fname = f.path.split('/').pop().replace(/\.md$/, '').toLowerCase();
       return fname === needle;
@@ -200,7 +199,7 @@ function setupFileOps() {
         return fname.includes(needle) || needle.includes(fname);
       });
     }
-    if (match) emit('file:open', { path: match.path });
+    if (match) emit('file:open', { path: match.path, paneId, newTab: !!newTab });
   });
 
   // Sauvegarde locale (Ctrl+S) — sauvegarde en mémoire uniquement, pas sur GitHub
@@ -345,8 +344,10 @@ function showNewFolderModal() {
     const name = input.value.trim();
     if (!name) return;
     cleanup();
-    // GitHub ne peut pas créer un dossier vide — on crée un .gitkeep dedans
-    await createFile(`${name}/.gitkeep`, '');
+    // GitHub ne peut pas créer un dossier vide — on crée une note de bienvenue
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    await createFile(`${name}/${name}.md`, `---\ndate: ${dateStr}\ntags: []\n---\n\n# ${name}\n`);
     if (title) title.textContent = 'NEW FILE';
     input.placeholder = 'filename.md';
   };
@@ -522,18 +523,22 @@ async function pushAllChanges(message) {
 
     await GitHub.pushChanges(files, message);
 
-    // Met à jour les SHA en cache
-    for (const path of state.dirtyFiles.keys()) {
-      const { sha } = await GitHub.fetchFile(path);
-      const cached = state.fileCache.get(path);
-      if (cached) cached.sha = sha;
-      Layout.updateTabSha(path, sha);
-      if (path === Editor.getCurrentPath()) Editor.updateSha(sha);
-    }
-
+    // Met à jour les SHA depuis l'API après un court délai (GitHub indexation)
     state.dirtyFiles.clear();
     Editor.clearDirty();
     setSyncStatus('ok', syncLabel());
+
+    // Rafraîchit les SHA en arrière-plan sans bloquer l'UI
+    setTimeout(async () => {
+      for (const path of [...state.fileCache.keys()]) {
+        try {
+          const { sha } = await GitHub.fetchFile(path);
+          const cached = state.fileCache.get(path);
+          if (cached) cached.sha = sha;
+          Layout.updateTabSha(path, sha);
+        } catch {}
+      }
+    }, 2000);
   } catch (err) {
     setSyncStatus('error', 'Push failed');
     console.error('push:', err);
@@ -669,7 +674,8 @@ async function resolveAttachmentImg(filename, targetImg) {
   const apply = async (img) => {
     for (const p of paths) {
       try {
-        const res = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(p)}?ref=${branch}`, {
+        const encodedPath = p.split('/').map(encodeURIComponent).join('/');
+        const res = await fetch(`https://api.github.com/repos/${repo}/contents/${encodedPath}?ref=${branch}`, {
           headers: { 'Authorization': `token ${token}` }
         });
         if (res.ok) {
