@@ -5,6 +5,7 @@ let _activePaneId = null;
 let _container = null;
 let _idCounter = 0;
 let _dragState = null;
+let _previewShortcut = 'e';
 
 function uid() { return ++_idCounter; }
 
@@ -17,6 +18,10 @@ export function init(container) {
 
   on('file:loaded', ({ path, content, sha, newTab, paneId }) => {
     openInPane(paneId || _activePaneId, path, content, sha, newTab);
+  });
+
+  on('settings:updated', ({ previewShortcut }) => {
+    _previewShortcut = parsePreviewShortcut(previewShortcut);
   });
 
   on('editor:changed', ({ path, content, paneId }) => {
@@ -32,6 +37,21 @@ export function init(container) {
       const tab = pane.tabs.find(t => t.path === path);
       if (tab) { tab.isDirty = false; renderTabBar(pane); }
     });
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key.toLowerCase() === _previewShortcut) {
+      const pane = getActivePane();
+      if (!pane) return;
+      const contentEl = _container.querySelector(`[data-pane-content="${pane.id}"]`);
+      if (!contentEl) return;
+      const editor = contentEl.querySelector('.layout-editor');
+      const preview = contentEl.querySelector('.layout-preview');
+      if (!editor || !preview) return;
+      e.preventDefault();
+      const btn = _container.querySelector(`[data-pane-tab-bar="${pane.id}"] [data-action="preview"]`);
+      togglePreview(editor, preview, pane, btn);
+    }
   });
 
   render();
@@ -448,7 +468,7 @@ function renderMarkdown(content) {
   }
 
   // Fix apostrophes
-  html = html.replace(/&#39;/g, "'").replace(/&amp;#39;/g, "'");
+  html = html.replace(/&(?:amp;)?#39;|&apos;/g, "'");
 
   return html;
 }
@@ -896,6 +916,12 @@ function firstPaneIn(node) {
   return firstPaneIn(node.children[0]);
 }
 
+function parsePreviewShortcut(value) {
+  if (!value) return 'e';
+  const match = value.toLowerCase().match(/(?:ctrl\+|control\+)?([a-z0-9])/);
+  return match ? match[1] : 'e';
+}
+
 function escHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -904,5 +930,19 @@ function escHtml(str) {
 
 export function getActivePane() { return findPane(_activePaneId); }
 export function getActivePaneId() { return _activePaneId; }
+export function getCurrentPath() { const pane = getActivePane(); return pane?.tabs[pane.activeIdx]?.path || null; }
+export function getCurrentContent() { const pane = getActivePane(); return pane?.tabs[pane.activeIdx]?.content || ''; }
+export function isCurrentDirty() { const pane = getActivePane(); return pane?.tabs[pane.activeIdx]?.isDirty || false; }
 export function getDirtyTabs() { return allPanes().flatMap(p => p.tabs.filter(t => t.isDirty && t.path !== '__graph__')); }
+export function toggleCurrentPreview() {
+  const pane = getActivePane();
+  if (!pane) return;
+  const contentEl = _container.querySelector(`[data-pane-content="${pane.id}"]`);
+  if (!contentEl) return;
+  const editor = contentEl.querySelector('.layout-editor');
+  const preview = contentEl.querySelector('.layout-preview');
+  if (!editor || !preview) return;
+  const btn = _container.querySelector(`[data-pane-tab-bar="${pane.id}"] [data-action="preview"]`);
+  togglePreview(editor, preview, pane, btn);
+}
 export function updateTabSha(path, sha) { allPanes().forEach(p => { const t = p.tabs.find(t => t.path === path); if (t) t.sha = sha; }); }

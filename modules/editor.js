@@ -181,7 +181,7 @@ export function togglePreview() {
 
 function renderMarkdown(content) {
   const withoutFrontmatter = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
-  return marked.parse(withoutFrontmatter);
+  return marked.parse(withoutFrontmatter).replace(/&(?:amp;)?#39;|&apos;/g, "'");
 }
 
 function updateDirtyState() {

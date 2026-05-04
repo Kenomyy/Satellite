@@ -228,9 +228,62 @@ function setupFileOps() {
     showNewFileModal(folder);
   });
 
+  on('folder:new-request', ({ parent }) => {
+    showNewFolderModal(parent);
+  });
+
   // Renommage
   on('file:rename-request', ({ path, name }) => {
     showRenameModal(path, name);
+  });
+
+  on('folder:rename-request', ({ path, name }) => {
+    showRenameFolderModal(path, name);
+  });
+
+  on('folder:delete-request', async ({ path }) => {
+    if (!confirm(`Delete folder "${path}" and all its contents?`)) return;
+    try {
+      setSyncStatus('syncing', 'Deleting folder…');
+      const files = Explorer.flatFiles(state.tree).filter(f => f.path.startsWith(`${path}/`));
+      for (const file of files) {
+        await GitHub.deleteFile(file.path, file.sha, `Delete ${file.path}`);
+        state.fileCache.delete(file.path);
+        state.dirtyFiles.delete(file.path);
+        emit('file:deleted', { path: file.path });
+      }
+      await loadVault();
+      setSyncStatus('ok', syncLabel());
+    } catch (err) {
+      setSyncStatus('error', 'Delete failed');
+      console.error('folder:delete:', err);
+    }
+  });
+
+  // Déplacement de note
+  on('file:move-request', async ({ path, folder }) => {
+    if (!folder) return;
+    const name = path.split('/').pop();
+    const newPath = `${folder}/${name}`;
+    if (newPath === path) return;
+
+    try {
+      setSyncStatus('syncing', 'Moving…');
+      let cached = state.fileCache.get(path);
+      if (!cached) {
+        cached = await GitHub.fetchFile(path);
+      }
+      await GitHub.renameFile(path, newPath, cached.content, cached.sha);
+      state.fileCache.delete(path);
+      state.fileCache.set(newPath, { content: cached.content, sha: null });
+      emit('file:deleted', { path });
+      await loadVault();
+      emit('file:open', { path: newPath });
+      setSyncStatus('ok', syncLabel());
+    } catch (err) {
+      setSyncStatus('error', 'Move failed');
+      console.error('file:move:', err);
+    }
   });
 
   // Suppression
@@ -258,8 +311,8 @@ function setupFileOps() {
         const res = await GitHub.writeFile(path, content, sha, `Update ${path}`);
         const newSha = res.content.sha;
         state.fileCache.set(path, { content, sha: newSha });
-        Editor.updateSha(newSha);
-        Editor.clearDirty();
+        Layout.updateTabSha(path, newSha);
+        emit('file:saved-silent', { path, content, sha: newSha });
         state.dirtyFiles.delete(path);
         setSyncStatus('ok', syncLabel());
       } catch (err) {
@@ -328,7 +381,7 @@ function showNewFileModal(folder) {
   input.addEventListener('keydown', handleKey);
 }
 
-function showNewFolderModal() {
+function showNewFolderModal(parent = '') {
   const modal = document.getElementById('newfile-modal');
   const input = document.getElementById('newfile-input');
   const confirmBtn = document.getElementById('newfile-confirm');
@@ -344,10 +397,11 @@ function showNewFolderModal() {
     const name = input.value.trim();
     if (!name) return;
     cleanup();
+    const folderPath = parent ? `${parent}/${name}` : name;
     // GitHub ne peut pas créer un dossier vide — on crée une note de bienvenue
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
-    await createFile(`${name}/${name}.md`, `---\ndate: ${dateStr}\ntags: []\n---\n\n# ${name}\n`);
+    await createFile(`${folderPath}/${name}.md`, `---\ndate: ${dateStr}\ntags: []\n---\n\n# ${name}\n`);
     if (title) title.textContent = 'NEW FILE';
     input.placeholder = 'filename.md';
   };
@@ -430,12 +484,73 @@ function showRenameModal(path, currentName) {
     if (e.key === 'Escape') cleanup();
   };
 
-  const cleanup = () => {
+  function cleanup() {
     modal.classList.add('hidden');
     confirmBtn.removeEventListener('click', handleConfirm);
     cancelBtn.removeEventListener('click', cleanup);
     input.removeEventListener('keydown', handleKey);
+  }
+
+  confirmBtn.addEventListener('click', handleConfirm);
+  cancelBtn.addEventListener('click', cleanup);
+  input.addEventListener('keydown', handleKey);
+}
+
+function showRenameFolderModal(path, currentName) {
+  const modal = document.getElementById('rename-modal');
+  const input = document.getElementById('rename-input');
+  const confirmBtn = document.getElementById('rename-confirm');
+  const cancelBtn = document.getElementById('rename-cancel');
+
+  input.value = currentName;
+  modal.classList.remove('hidden');
+  input.focus();
+  input.select();
+
+  const handleConfirm = async () => {
+    const newName = input.value.trim();
+    if (!newName || newName === currentName) { cleanup(); return; }
+    const parent = path.split('/').slice(0, -1).join('/');
+    const newFolderPath = parent ? `${parent}/${newName}` : newName;
+
+    cleanup();
+
+    try {
+      setSyncStatus('syncing', 'Renaming folder…');
+      const filesToMove = Explorer.flatFiles(state.tree).filter(f => f.path.startsWith(`${path}/`));
+      const currentPath = Layout.getCurrentPath();
+      let reopenPath = null;
+      for (const file of filesToMove) {
+        const newPath = file.path.replace(`${path}/`, `${newFolderPath}/`);
+        const cachedFile = state.fileCache.get(file.path);
+        const content = cachedFile?.content ?? (await GitHub.fetchFile(file.path)).content;
+        await GitHub.renameFile(file.path, newPath, content, file.sha);
+        state.fileCache.delete(file.path);
+        emit('file:deleted', { path: file.path });
+        if (currentPath && currentPath.startsWith(`${file.path}`)) {
+          reopenPath = newPath;
+        }
+      }
+      await loadVault();
+      if (reopenPath) emit('file:open', { path: reopenPath });
+      setSyncStatus('ok', syncLabel());
+    } catch (err) {
+      setSyncStatus('error', 'Folder rename failed');
+      console.error('renameFolder:', err);
+    }
   };
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter') handleConfirm();
+    if (e.key === 'Escape') cleanup();
+  };
+
+  function cleanup() {
+    modal.classList.add('hidden');
+    confirmBtn.removeEventListener('click', handleConfirm);
+    cancelBtn.removeEventListener('click', cleanup);
+    input.removeEventListener('keydown', handleKey);
+  }
 
   confirmBtn.addEventListener('click', handleConfirm);
   cancelBtn.addEventListener('click', cleanup);
@@ -447,7 +562,8 @@ function showRenameModal(path, currentName) {
 function setupSync() {
   // Pull
   document.getElementById('btn-pull')?.addEventListener('click', async () => {
-    if (Editor.isDirty()) {
+    const hasDirty = Layout.getDirtyTabs().length > 0;
+    if (hasDirty) {
       const ok = confirm('You have unsaved changes. Pull anyway?');
       if (!ok) return;
     }
@@ -455,7 +571,7 @@ function setupSync() {
     try {
       await loadVault();
       // Recharge le fichier actif si ouvert
-      const activePath = Editor.getCurrentPath();
+      const activePath = Layout.getCurrentPath();
       if (activePath) emit('file:open', { path: activePath });
     } catch (err) {
       setSyncStatus('error', 'Pull failed');
@@ -483,12 +599,6 @@ async function pushAllChanges(message) {
     const dirtyTabs = Layout.getDirtyTabs();
     for (const tab of dirtyTabs) {
       state.dirtyFiles.set(tab.path, tab.content);
-    }
-    // Ajoute aussi l'onglet actif si l'éditeur a des modifs non propagées
-    if (Editor.isDirty()) {
-      const path = Editor.getCurrentPath();
-      const content = Editor.getContent();
-      if (path) state.dirtyFiles.set(path, content);
     }
 
     if (state.dirtyFiles.size === 0) {
@@ -523,9 +633,15 @@ async function pushAllChanges(message) {
 
     await GitHub.pushChanges(files, message);
 
-    // Met à jour les SHA depuis l'API après un court délai (GitHub indexation)
+    // Met à jour l'état local et le badge de sauvegarde
+    for (const { path, content } of files) {
+      const cached = state.fileCache.get(path);
+      if (cached) {
+        state.fileCache.set(path, { content, sha: cached.sha });
+      }
+      emit('file:saved-silent', { path, content, sha: state.fileCache.get(path)?.sha });
+    }
     state.dirtyFiles.clear();
-    Editor.clearDirty();
     setSyncStatus('ok', syncLabel());
 
     // Rafraîchit les SHA en arrière-plan sans bloquer l'UI
@@ -590,7 +706,7 @@ function setupSidebar() {
   });
 
   document.getElementById('btn-preview-toggle')?.addEventListener('click', () => {
-    if (Editor.getCurrentPath()) Editor.togglePreview();
+    Layout.toggleCurrentPreview();
   });
 }
 
@@ -607,18 +723,40 @@ function setupSettings() {
     applyAccentColor(color);
   });
 
-  document.getElementById('settings-save')?.addEventListener('click', () => {
+  document.getElementById('settings-save')?.addEventListener('click', async () => {
     const accent = picker?.value || '#E8E8F0';
     const templatesFolder = document.getElementById('settings-templates-folder')?.value.trim() || 'templates';
     const attachmentsFolder = document.getElementById('settings-attachments-folder')?.value.trim() || 'source';
-
+    const token = document.getElementById('settings-token')?.value.trim() || '';
+    const repo = document.getElementById('settings-repo')?.value.trim() || '';
+    const branch = document.getElementById('settings-branch')?.value.trim() || 'main';
+    const previewShortcut = document.getElementById('settings-preview-shortcut')?.value.trim() || 'Ctrl+E';
     const readableWidth = document.getElementById('settings-readable-width')?.checked || false;
-    saveSettings({ ...state.settings, accentColor: accent, templatesFolder, attachmentsFolder, readableWidth });
+
+    const newSettings = {
+      ...state.settings,
+      accentColor: accent,
+      templatesFolder,
+      attachmentsFolder,
+      token,
+      repo,
+      branch,
+      previewShortcut,
+      readableWidth,
+    };
+
+    saveSettings(newSettings);
+    state.settings = newSettings;
+
+    if (token && repo) {
+      GitHub.init({ token, repo, branch });
+      await loadVault();
+    }
+
     // Applique readable width
     document.querySelectorAll('.layout-editor-wrap').forEach(el => {
       el.dataset.readable = readableWidth ? 'true' : 'false';
     });
-    state.settings = loadSettings();
 
     emit('settings:updated', state.settings);
     modal.classList.add('hidden');
@@ -649,8 +787,16 @@ function showSettingsModal() {
 
   const tf = document.getElementById('settings-templates-folder');
   const af = document.getElementById('settings-attachments-folder');
+  const tokenInput = document.getElementById('settings-token');
+  const repoInput = document.getElementById('settings-repo');
+  const branchInput = document.getElementById('settings-branch');
+  const previewInput = document.getElementById('settings-preview-shortcut');
   if (tf) tf.value = state.settings.templatesFolder || 'templates';
   if (af) af.value = state.settings.attachmentsFolder || 'source';
+  if (tokenInput) tokenInput.value = state.settings.token || '';
+  if (repoInput) repoInput.value = state.settings.repo || '';
+  if (branchInput) branchInput.value = state.settings.branch || 'main';
+  if (previewInput) previewInput.value = state.settings.previewShortcut || 'Ctrl+E';
 
   modal?.classList.remove('hidden');
 }

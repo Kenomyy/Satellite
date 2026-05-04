@@ -345,7 +345,8 @@ html, body {
   text-overflow: ellipsis;
 }
 
-.explorer-item:hover {
+.explorer-item:hover,
+.explorer-item.drag-over {
   background: var(--bg-surface);
   color: var(--text-primary);
 }
