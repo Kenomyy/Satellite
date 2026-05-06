@@ -34,6 +34,35 @@ export function init(container) {
     });
   });
 
+  // Event delegation pour les tabs (close/split/preview)
+  _container.addEventListener('click', (e) => {
+    const target = e.target.closest('button');
+    if (!target) return;
+
+    if (target.classList.contains('layout-tab-close')) {
+      e.stopPropagation();
+      closeTab(target.dataset.pane, parseInt(target.dataset.idx));
+      return;
+    }
+    if (target.classList.contains('layout-split-btn')) {
+      e.stopPropagation();
+      splitPane(target.dataset.pane, target.dataset.dir);
+      return;
+    }
+    if (target.classList.contains('layout-action-btn') && target.dataset.action === 'preview') {
+      e.stopPropagation();
+      const paneId = target.dataset.pane;
+      const contentEl = _container.querySelector(`[data-pane-content="${paneId}"]`);
+      if (!contentEl) return;
+      const editor = contentEl.querySelector('.layout-editor');
+      const preview = contentEl.querySelector('.layout-preview');
+      if (!editor || !preview) return;
+      const p = findPane(paneId);
+      if (p) togglePreview(editor, preview, p, target);
+      return;
+    }
+  });
+
   render();
 }
 
@@ -266,51 +295,25 @@ function renderTabBar(pane) {
 }
 
 function setupTabBarEvents(tabBar, pane) {
+  // Event listeners pour les tabs (activations, middle-click)
   tabBar.querySelectorAll('.layout-tab').forEach(tab => {
     tab.addEventListener('click', (e) => {
       if (e.target.classList.contains('layout-tab-close')) return;
       setActiveTab(tab.dataset.pane, parseInt(tab.dataset.idx));
     });
 
+    // Middle click pour fermer un tab
     tab.addEventListener('auxclick', (e) => {
       if (e.button === 1) { e.preventDefault(); closeTab(tab.dataset.pane, parseInt(tab.dataset.idx)); }
     });
 
+    // Drag & drop
     tab.addEventListener('dragstart', (e) => {
       _dragState = { fromPane: tab.dataset.pane, tabIdx: parseInt(tab.dataset.idx) };
       e.dataTransfer.effectAllowed = 'move';
     });
   });
-
-  tabBar.querySelectorAll('.layout-tab-close').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      closeTab(btn.dataset.pane, parseInt(btn.dataset.idx));
-    });
-  });
-
-  tabBar.querySelectorAll('.layout-split-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      splitPane(btn.dataset.pane, btn.dataset.dir);
-    });
-  });
-
-  // Bouton preview par pane
-  const previewBtn = tabBar.querySelector('[data-action="preview"]');
-  if (previewBtn) {
-    previewBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const paneId = previewBtn.dataset.pane;
-      const contentEl = _container.querySelector(`[data-pane-content="${paneId}"]`);
-      if (!contentEl) return;
-      const editor = contentEl.querySelector('.layout-editor');
-      const preview = contentEl.querySelector('.layout-preview');
-      if (!editor || !preview) return;
-      const p = findPane(paneId);
-      if (p) togglePreview(editor, preview, p, previewBtn);
-    });
-  }
+  // Note: close/split/preview buttons sont gérés via event delegation dans init()
 }
 
 // ── PANE CONTENT ─────────────────────────────────────────
@@ -451,11 +454,12 @@ function renderMarkdown(content) {
   }
 
   // Décoder les entités HTML pour éviter &#39; etc.
-  html = html.replace(/&(#\d+|[a-zA-Z]+);/g, (match) => {
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = match;
-    return textarea.value;
-  });
+  const decodeEntities = (text) => {
+    const map = { 'amp': '&', 'lt': '<', 'gt': '>', 'quot': '"', 'apos': "'", 'nbsp': ' ', 'rsquo': "'", 'lsquo': "'", 'ldquo': '"', 'rdquo': '"' };
+    return text.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code))
+               .replace(/&([a-z]+);/g, (_, ent) => map[ent] || '&' + ent + ';');
+  };
+  html = decodeEntities(html);
 
   return html;
 }
