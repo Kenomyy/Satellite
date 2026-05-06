@@ -115,38 +115,6 @@ function closeTab(paneId, tabIdx) {
   emitActivate(pane);
 }
 
-// ── REMOVE PANE ──────────────────────────────────────────
-
-function removePane(paneId) {
-  const parent = findParent(paneId);
-  if (!parent) return; // Ne pas supprimer le root pane
-
-  const idx = parent.children.findIndex(c => c.id === paneId);
-  if (idx === -1) return;
-
-  const sibling = parent.children[1 - idx]; // L'autre enfant
-
-  // Remplace le parent par le sibling
-  if (parent === _root) {
-    _root = sibling;
-  } else {
-    const grandParent = findParent(parent.id);
-    if (grandParent) {
-      const pIdx = grandParent.children.findIndex(c => c.id === parent.id);
-      grandParent.children[pIdx] = sibling;
-    }
-  }
-
-  // Si le sibling est actif, garde l'actif
-  if (_activePaneId === paneId) {
-    _activePaneId = sibling.id;
-  }
-
-  render();
-  const activePane = findPane(_activePaneId);
-  if (activePane) emitActivate(activePane);
-}
-
 // ── ACTIVE TAB ───────────────────────────────────────────
 
 function setActiveTab(paneId, tabIdx) {
@@ -189,6 +157,17 @@ export function splitPane(paneId, direction) {
 }
 
 // ── REMOVE PANE ──────────────────────────────────────────
+
+function firstPaneIn(node) {
+  if (node.type === 'pane') return node;
+  if (node.children) {
+    for (const child of node.children) {
+      const p = firstPaneIn(child);
+      if (p) return p;
+    }
+  }
+  return null;
+}
 
 function removePane(paneId) {
   const parent = findParent(paneId);
