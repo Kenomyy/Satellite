@@ -181,7 +181,7 @@ export function togglePreview() {
 
 function renderMarkdown(content) {
   const withoutFrontmatter = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
-  return marked.parse(withoutFrontmatter).replace(/&(?:amp;)?#39;|&apos;/g, "'");
+  return marked.parse(withoutFrontmatter);
 }
 
 function updateDirtyState() {
@@ -246,11 +246,16 @@ function setupEvents() {
     }
   });
 
-  // file:opened est géré par layout.js — editor.js n'intervient plus ici
+  // file:opened géré par layout.js uniquement
 }
 
 function setupShortcuts() {
   document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'e') {
+      e.preventDefault();
+      if (_currentPath) togglePreview();
+    }
+
     if (e.ctrlKey && e.key === 's') {
       e.preventDefault();
       if (_currentPath && _isDirty) {

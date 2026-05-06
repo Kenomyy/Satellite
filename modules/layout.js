@@ -5,7 +5,6 @@ let _activePaneId = null;
 let _container = null;
 let _idCounter = 0;
 let _dragState = null;
-let _previewShortcut = 'e';
 
 function uid() { return ++_idCounter; }
 
@@ -18,10 +17,6 @@ export function init(container) {
 
   on('file:loaded', ({ path, content, sha, newTab, paneId }) => {
     openInPane(paneId || _activePaneId, path, content, sha, newTab);
-  });
-
-  on('settings:updated', ({ previewShortcut }) => {
-    _previewShortcut = parsePreviewShortcut(previewShortcut);
   });
 
   on('editor:changed', ({ path, content, paneId }) => {
@@ -39,28 +34,13 @@ export function init(container) {
     });
   });
 
-  document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.key.toLowerCase() === _previewShortcut) {
-      const pane = getActivePane();
-      if (!pane) return;
-      const contentEl = _container.querySelector(`[data-pane-content="${pane.id}"]`);
-      if (!contentEl) return;
-      const editor = contentEl.querySelector('.layout-editor');
-      const preview = contentEl.querySelector('.layout-preview');
-      if (!editor || !preview) return;
-      e.preventDefault();
-      const btn = _container.querySelector(`[data-pane-tab-bar="${pane.id}"] [data-action="preview"]`);
-      togglePreview(editor, preview, pane, btn);
-    }
-  });
-
   render();
 }
 
 // ── FACTORIES ────────────────────────────────────────────
 
 function makePane(tabs = []) {
-  return { type: 'pane', id: uid(), tabs, activeIdx: 0 };
+  return { type: 'pane', id: uid(), tabs, activeIdx: 0, isPreview: true };
 }
 
 function makeSplit(direction, ratio, a, b) {
@@ -200,14 +180,17 @@ function removePane(paneId) {
 
   render();
 
-  // Après render, émet l'activation du nouveau pane actif
+  // Après render, émet l'activation — setTimeout pour laisser le DOM se mettre à jour
   if (firstPane && firstPane.tabs.length > 0) {
-    emit('pane:tab-activated', {
-      paneId: firstPane.id,
-      path: firstPane.tabs[firstPane.activeIdx].path,
-      content: firstPane.tabs[firstPane.activeIdx].content,
-      sha: firstPane.tabs[firstPane.activeIdx].sha,
-    });
+    const tab = firstPane.tabs[firstPane.activeIdx];
+    setTimeout(() => {
+      emit('pane:tab-activated', {
+        paneId: firstPane.id,
+        path: tab.path,
+        content: tab.content,
+        sha: tab.sha,
+      });
+    }, 0);
   }
 }
 
@@ -375,8 +358,10 @@ function buildPaneContent(pane) {
 
     setupEditorEvents(editor, preview, pane);
 
-    // Mode preview par défaut
-    showPreview(editor, preview, pane, null);
+    // Respecte l'état preview du pane
+    if (pane.isPreview !== false) {
+      showPreview(editor, preview, pane, null);
+    }
   }
 
   setupDropTarget(content, pane);
@@ -421,15 +406,15 @@ function showPreview(editor, preview, pane, btn) {
 }
 
 function togglePreview(editor, preview, pane, btn) {
-  // isPreview = true si l'editor est caché (on est en mode preview)
   const isPreview = editor.classList.contains('hidden');
   if (isPreview) {
-    // Retour edit
+    pane.isPreview = false;
     preview.classList.add('hidden');
     editor.classList.remove('hidden');
     editor.focus();
     if (btn) btn.style.color = '';
   } else {
+    pane.isPreview = true;
     showPreview(editor, preview, pane, btn);
   }
 }
@@ -440,35 +425,31 @@ function renderMarkdown(content) {
   const clean = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
   if (typeof marked === 'undefined') return escHtml(clean);
 
-  // Token map pour préserver les liens et images hors portée de marked
-  const tokens = {};
-  let idx = 0;
-
-  // ![[image]] → token
+  // Remplace ![[img]] par markdown image standard
   let processed = clean.replace(/!\[\[([^\]]+)\]\]/g, (_, src) => {
     const name = src.split('|')[0].trim();
-    const k = 'XXTOK' + (idx++) + 'XX';
-    tokens[k] = '<img src="attachment://' + name + '" alt="' + name + '" class="ob-img">';
-    return k;
+    return '![' + name + '](attachment://' + name + ')';
   });
 
-  // [[note|alias]] et [[note]] → token
+  // Remplace [[note|alias]] et [[note]] par tokens sûrs
+  const linkStore = {};
+  let tokIdx = 0;
   processed = processed.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, path, alias) => {
     const label = alias || path;
-    const k = 'XXTOK' + (idx++) + 'XX';
-    tokens[k] = '<a class="ob-link" data-target="' + path + '" href="#">' + label + '</a>';
+    const k = 'ZZTOK' + (tokIdx++) + 'ZZ';
+    linkStore[k] = '<a class="ob-link" data-target="' + path + '" href="#">' + label + '</a>';
     return k;
   });
 
   let html = marked.parse(processed);
 
-  // Restaure les tokens
-  for (const [k, v] of Object.entries(tokens)) {
+  // Restaure les liens
+  for (const [k, v] of Object.entries(linkStore)) {
     html = html.split(k).join(v);
   }
 
-  // Fix apostrophes
-  html = html.replace(/&(?:amp;)?#39;|&apos;/g, "'");
+  // Fix apostrophes partout
+  html = html.replace(/&#39;/g, "'");
 
   return html;
 }
@@ -916,12 +897,6 @@ function firstPaneIn(node) {
   return firstPaneIn(node.children[0]);
 }
 
-function parsePreviewShortcut(value) {
-  if (!value) return 'e';
-  const match = value.toLowerCase().match(/(?:ctrl\+|control\+)?([a-z0-9])/);
-  return match ? match[1] : 'e';
-}
-
 function escHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -930,19 +905,5 @@ function escHtml(str) {
 
 export function getActivePane() { return findPane(_activePaneId); }
 export function getActivePaneId() { return _activePaneId; }
-export function getCurrentPath() { const pane = getActivePane(); return pane?.tabs[pane.activeIdx]?.path || null; }
-export function getCurrentContent() { const pane = getActivePane(); return pane?.tabs[pane.activeIdx]?.content || ''; }
-export function isCurrentDirty() { const pane = getActivePane(); return pane?.tabs[pane.activeIdx]?.isDirty || false; }
 export function getDirtyTabs() { return allPanes().flatMap(p => p.tabs.filter(t => t.isDirty && t.path !== '__graph__')); }
-export function toggleCurrentPreview() {
-  const pane = getActivePane();
-  if (!pane) return;
-  const contentEl = _container.querySelector(`[data-pane-content="${pane.id}"]`);
-  if (!contentEl) return;
-  const editor = contentEl.querySelector('.layout-editor');
-  const preview = contentEl.querySelector('.layout-preview');
-  if (!editor || !preview) return;
-  const btn = _container.querySelector(`[data-pane-tab-bar="${pane.id}"] [data-action="preview"]`);
-  togglePreview(editor, preview, pane, btn);
-}
 export function updateTabSha(path, sha) { allPanes().forEach(p => { const t = p.tabs.find(t => t.path === path); if (t) t.sha = sha; }); }

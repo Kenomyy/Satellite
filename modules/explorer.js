@@ -63,23 +63,6 @@ function renderFolder(node, depth) {
     <span class="explorer-folder-name">${node.name}</span>
   `;
 
-  row.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    row.classList.add('drag-over');
-  });
-
-  row.addEventListener('dragleave', () => {
-    row.classList.remove('drag-over');
-  });
-
-  row.addEventListener('drop', (e) => {
-    e.preventDefault();
-    row.classList.remove('drag-over');
-    const sourcePath = e.dataTransfer.getData('text/plain');
-    if (!sourcePath || sourcePath === node.path || sourcePath.startsWith(node.path + '/')) return;
-    emit('file:move-request', { path: sourcePath, folder: node.path });
-  });
-
   const children = document.createElement('div');
   children.className = 'explorer-children';
 
@@ -101,6 +84,23 @@ function renderFolder(node, depth) {
     sessionStorage.setItem(`folder:${node.path}`, open ? 'open' : 'closed');
   });
 
+  row.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    row.classList.add('drag-over');
+  });
+  row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+  row.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    row.classList.remove('drag-over');
+    const fromPath = e.dataTransfer.getData('text/plain');
+    if (!fromPath || fromPath === node.path) return;
+    const fileName = fromPath.split('/').pop();
+    const toPath = node.path + '/' + fileName;
+    if (fromPath !== toPath) emit('file:move-request', { fromPath, toPath });
+  });
+
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     showContextMenu(e, node, 'folder');
@@ -116,12 +116,6 @@ function renderFile(node, depth) {
   row.className = 'explorer-item file';
   row.dataset.path = node.path;
   row.style.paddingLeft = `${12 + depth * 14}px`;
-  row.draggable = true;
-
-  row.addEventListener('dragstart', (e) => {
-    e.dataTransfer.setData('text/plain', node.path);
-    e.dataTransfer.effectAllowed = 'move';
-  });
 
   const isMarkdown = node.name.endsWith('.md');
   const icon = isMarkdown
@@ -133,6 +127,14 @@ function renderFile(node, depth) {
   row.innerHTML = `${icon}<span>${displayName}</span>`;
 
   if (_activeFile === node.path) row.classList.add('active');
+
+  row.draggable = true;
+  row.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', node.path);
+    e.dataTransfer.effectAllowed = 'move';
+    row.classList.add('dragging');
+  });
+  row.addEventListener('dragend', () => row.classList.remove('dragging'));
 
   row.addEventListener('click', () => {
     emit('file:open', { path: node.path, sha: node.sha, newTab: false });
@@ -238,11 +240,7 @@ function hideContextMenu() {
 function handleContextAction(action, { node }) {
   switch (action) {
     case 'rename':
-      if (node.type === 'tree') {
-        emit('folder:rename-request', { path: node.path, name: node.name });
-      } else {
-        emit('file:rename-request', { path: node.path, name: node.name });
-      }
+      emit('file:rename-request', { path: node.path, name: node.name });
       break;
     case 'delete':
       emit('file:delete-request', { path: node.path, sha: node.sha });
