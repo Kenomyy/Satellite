@@ -171,9 +171,11 @@ function firstPaneIn(node) {
 
 function removePane(paneId) {
   const parent = findParent(paneId);
-  if (!parent) return; // pane principal, on touche pas
+  if (!parent || parent.children.length < 2) return;
 
   const idx = parent.children.findIndex(c => c.id === paneId);
+  if (idx === -1) return;
+
   const sibling = parent.children[1 - idx];
 
   const grandParent = findParent(parent.id);
@@ -181,27 +183,27 @@ function removePane(paneId) {
     _root = sibling;
   } else {
     const parentIdx = grandParent.children.findIndex(c => c.id === parent.id);
-    grandParent.children[parentIdx] = sibling;
+    if (parentIdx !== -1) grandParent.children[parentIdx] = sibling;
   }
 
-  // Trouve le premier pane dispo AVANT le render
   const firstPane = firstPaneIn(sibling) || firstPaneIn(_root);
-  if (firstPane) _activePaneId = firstPane.id;
-  else _activePaneId = null;
+  _activePaneId = firstPane ? firstPane.id : null;
 
   render();
 
-  // Après render, émet l'activation — setTimeout pour laisser le DOM se mettre à jour
-  if (firstPane && firstPane.tabs.length > 0) {
-    const tab = firstPane.tabs[firstPane.activeIdx];
-    setTimeout(() => {
-      emit('pane:tab-activated', {
-        paneId: firstPane.id,
-        path: tab.path,
-        content: tab.content,
-        sha: tab.sha,
-      });
-    }, 0);
+  if (firstPane && firstPane.tabs && firstPane.tabs.length > 0) {
+    const activeIdx = firstPane.activeIdx || 0;
+    const tab = firstPane.tabs[activeIdx];
+    if (tab) {
+      setTimeout(() => {
+        emit('pane:tab-activated', {
+          paneId: firstPane.id,
+          path: tab.path,
+          content: tab.content,
+          sha: tab.sha,
+        });
+      }, 0);
+    }
   }
 }
 
