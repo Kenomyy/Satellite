@@ -34,34 +34,7 @@ export function init(container) {
     });
   });
 
-  // Event delegation pour les tabs (close/split/preview)
-  _container.addEventListener('click', (e) => {
-    const target = e.target.closest('button');
-    if (!target) return;
-
-    if (target.classList.contains('layout-tab-close')) {
-      e.stopPropagation();
-      closeTab(target.dataset.pane, parseInt(target.dataset.idx));
-      return;
-    }
-    if (target.classList.contains('layout-split-btn')) {
-      e.stopPropagation();
-      splitPane(target.dataset.pane, target.dataset.dir);
-      return;
-    }
-    if (target.classList.contains('layout-action-btn') && target.dataset.action === 'preview') {
-      e.stopPropagation();
-      const paneId = target.dataset.pane;
-      const contentEl = _container.querySelector(`[data-pane-content="${paneId}"]`);
-      if (!contentEl) return;
-      const editor = contentEl.querySelector('.layout-editor');
-      const preview = contentEl.querySelector('.layout-preview');
-      if (!editor || !preview) return;
-      const p = findPane(paneId);
-      if (p) togglePreview(editor, preview, p, target);
-      return;
-    }
-  });
+  // Les listeners pour les buttons sont maintenant attachés DIRECTEMENT dans setupTabBarEvents
 
   render();
 }
@@ -298,7 +271,7 @@ function setupTabBarEvents(tabBar, pane) {
   // Event listeners pour les tabs (activations, middle-click, drag)
   tabBar.querySelectorAll('.layout-tab').forEach(tab => {
     tab.addEventListener('click', (e) => {
-      if (e.target.closest('button')) return; // Ignore les buttons (close, split, preview)
+      if (e.target.closest('button')) return; // Ignore les buttons
       setActiveTab(tab.dataset.pane, parseInt(tab.dataset.idx));
     });
 
@@ -313,7 +286,36 @@ function setupTabBarEvents(tabBar, pane) {
       e.dataTransfer.effectAllowed = 'move';
     });
   });
-  // IMPORTANT: Tous les autres buttons (close, split, preview) sont gérés via event delegation dans init()
+
+  // Attach listeners DIRECTEMENT aux buttons (close, split, preview)
+  tabBar.querySelectorAll('.layout-tab-close').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeTab(btn.dataset.pane, parseInt(btn.dataset.idx));
+    });
+  });
+
+  tabBar.querySelectorAll('.layout-split-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      splitPane(btn.dataset.pane, btn.dataset.dir);
+    });
+  });
+
+  const previewBtn = tabBar.querySelector('[data-action="preview"]');
+  if (previewBtn) {
+    previewBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const paneId = previewBtn.dataset.pane;
+      const contentEl = _container.querySelector(`[data-pane-content="${paneId}"]`);
+      if (!contentEl) return;
+      const editor = contentEl.querySelector('.layout-editor');
+      const preview = contentEl.querySelector('.layout-preview');
+      if (!editor || !preview) return;
+      const p = findPane(paneId);
+      if (p) togglePreview(editor, preview, p, previewBtn);
+    });
+  }
 }
 
 // ── PANE CONTENT ─────────────────────────────────────────
@@ -385,10 +387,6 @@ function showPreview(editor, preview, pane, btn) {
   const tab = pane.tabs[pane.activeIdx];
   if (!tab) return;
   preview.innerHTML = renderMarkdown(tab.content || '');
-  
-  // Décoder toutes les entités HTML dans le DOM rendu
-  decodeHtmlEntities(preview);
-  
   preview.classList.remove('hidden');
   editor.classList.add('hidden');
   if (btn) btn.style.color = 'var(--accent)';
@@ -456,6 +454,17 @@ function renderMarkdown(content) {
   for (const [k, v] of Object.entries(linkStore)) {
     html = html.split(k).join(v);
   }
+
+  // Décode les entités HTML dans le STRING avant d'assigner à innerHTML
+  html = html.replace(/&#39;/g, "'");
+  html = html.replace(/&#34;/g, '"');
+  html = html.replace(/&quot;/g, '"');
+  html = html.replace(/&apos;/g, "'");
+  html = html.replace(/&rsquo;/g, "'");
+  html = html.replace(/&lsquo;/g, "'");
+  html = html.replace(/&ldquo;/g, '"');
+  html = html.replace(/&rdquo;/g, '"');
+  html = html.replace(/&nbsp;/g, ' ');
 
   return html;
 }
@@ -905,33 +914,6 @@ function firstPaneIn(node) {
 
 function escHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-// Décoder les entités HTML dans un élément DOM (parcourt les text nodes)
-function decodeHtmlEntities(element) {
-  const walker = document.createTreeWalker(
-    element,
-    NodeFilter.SHOW_TEXT,
-    null,
-    false
-  );
-  
-  const nodesToReplace = [];
-  let node;
-  while (node = walker.nextNode()) {
-    if (node.textContent.includes('&')) {
-      nodesToReplace.push(node);
-    }
-  }
-  
-  const map = { 'amp': '&', 'lt': '<', 'gt': '>', 'quot': '"', 'apos': "'", 'nbsp': ' ', 'rsquo': "'", 'lsquo': "'", 'ldquo': '"', 'rdquo': '"' };
-  
-  nodesToReplace.forEach(textNode => {
-    let text = textNode.textContent;
-    text = text.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code));
-    text = text.replace(/&([a-z]+);/g, (_, ent) => map[ent] || '&' + ent + ';');
-    textNode.textContent = text;
-  });
 }
 
 // ── GETTERS ──────────────────────────────────────────────
