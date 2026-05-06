@@ -158,17 +158,6 @@ export function splitPane(paneId, direction) {
 
 // ── REMOVE PANE ──────────────────────────────────────────
 
-function firstPaneIn(node) {
-  if (node.type === 'pane') return node;
-  if (node.children) {
-    for (const child of node.children) {
-      const p = firstPaneIn(child);
-      if (p) return p;
-    }
-  }
-  return null;
-}
-
 function removePane(paneId) {
   const parent = findParent(paneId);
   if (!parent || parent.children.length < 2) return;
