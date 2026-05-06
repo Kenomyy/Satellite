@@ -115,6 +115,38 @@ function closeTab(paneId, tabIdx) {
   emitActivate(pane);
 }
 
+// ── REMOVE PANE ──────────────────────────────────────────
+
+function removePane(paneId) {
+  const parent = findParent(paneId);
+  if (!parent) return; // Ne pas supprimer le root pane
+
+  const idx = parent.children.findIndex(c => c.id === paneId);
+  if (idx === -1) return;
+
+  const sibling = parent.children[1 - idx]; // L'autre enfant
+
+  // Remplace le parent par le sibling
+  if (parent === _root) {
+    _root = sibling;
+  } else {
+    const grandParent = findParent(parent.id);
+    if (grandParent) {
+      const pIdx = grandParent.children.findIndex(c => c.id === parent.id);
+      grandParent.children[pIdx] = sibling;
+    }
+  }
+
+  // Si le sibling est actif, garde l'actif
+  if (_activePaneId === paneId) {
+    _activePaneId = sibling.id;
+  }
+
+  render();
+  const activePane = findPane(_activePaneId);
+  if (activePane) emitActivate(activePane);
+}
+
 // ── ACTIVE TAB ───────────────────────────────────────────
 
 function setActiveTab(paneId, tabIdx) {
@@ -356,7 +388,7 @@ function buildPaneContent(pane) {
     wrap.appendChild(preview);
     content.appendChild(wrap);
 
-    setupEditorEvents(editor, preview, pane);
+    setupEditorEvents(wrap, editor, preview, pane);
 
     // Respecte l'état preview du pane
     if (pane.isPreview !== false) {
@@ -448,19 +480,23 @@ function renderMarkdown(content) {
     html = html.split(k).join(v);
   }
 
-  // Fix apostrophes partout
-  html = html.replace(/&#39;/g, "'");
+  // Décoder les entités HTML pour éviter &#39; etc.
+  html = html.replace(/&(#\d+|[a-zA-Z]+);/g, (match) => {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = match;
+    return textarea.value;
+  });
 
   return html;
 }
 
 // ── EDITOR EVENTS ────────────────────────────────────────
 
-function setupEditorEvents(editor, preview, pane) {
+function setupEditorEvents(wrap, editor, preview, pane) {
   let _emojiTimeout = null;
   let _linkTimeout = null;
 
-  editor.addEventListener('input', () => {
+  wrap.addEventListener('keydown', (e) => {
     const tab = pane.tabs[pane.activeIdx];
     if (!tab) return;
     tab.content = editor.value;
