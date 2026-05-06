@@ -295,10 +295,10 @@ function renderTabBar(pane) {
 }
 
 function setupTabBarEvents(tabBar, pane) {
-  // Event listeners pour les tabs (activations, middle-click)
+  // Event listeners pour les tabs (activations, middle-click, drag)
   tabBar.querySelectorAll('.layout-tab').forEach(tab => {
     tab.addEventListener('click', (e) => {
-      if (e.target.classList.contains('layout-tab-close')) return;
+      if (e.target.closest('button')) return; // Ignore les buttons (close, split, preview)
       setActiveTab(tab.dataset.pane, parseInt(tab.dataset.idx));
     });
 
@@ -313,7 +313,7 @@ function setupTabBarEvents(tabBar, pane) {
       e.dataTransfer.effectAllowed = 'move';
     });
   });
-  // Note: close/split/preview buttons sont gérés via event delegation dans init()
+  // IMPORTANT: Tous les autres buttons (close, split, preview) sont gérés via event delegation dans init()
 }
 
 // ── PANE CONTENT ─────────────────────────────────────────
@@ -385,6 +385,10 @@ function showPreview(editor, preview, pane, btn) {
   const tab = pane.tabs[pane.activeIdx];
   if (!tab) return;
   preview.innerHTML = renderMarkdown(tab.content || '');
+  
+  // Décoder toutes les entités HTML dans le DOM rendu
+  decodeHtmlEntities(preview);
+  
   preview.classList.remove('hidden');
   editor.classList.add('hidden');
   if (btn) btn.style.color = 'var(--accent)';
@@ -452,14 +456,6 @@ function renderMarkdown(content) {
   for (const [k, v] of Object.entries(linkStore)) {
     html = html.split(k).join(v);
   }
-
-  // Décoder les entités HTML pour éviter &#39; etc.
-  const decodeEntities = (text) => {
-    const map = { 'amp': '&', 'lt': '<', 'gt': '>', 'quot': '"', 'apos': "'", 'nbsp': ' ', 'rsquo': "'", 'lsquo': "'", 'ldquo': '"', 'rdquo': '"' };
-    return text.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code))
-               .replace(/&([a-z]+);/g, (_, ent) => map[ent] || '&' + ent + ';');
-  };
-  html = decodeEntities(html);
 
   return html;
 }
@@ -909,6 +905,33 @@ function firstPaneIn(node) {
 
 function escHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Décoder les entités HTML dans un élément DOM (parcourt les text nodes)
+function decodeHtmlEntities(element) {
+  const walker = document.createTreeWalker(
+    element,
+    NodeFilter.SHOW_TEXT,
+    null,
+    false
+  );
+  
+  const nodesToReplace = [];
+  let node;
+  while (node = walker.nextNode()) {
+    if (node.textContent.includes('&')) {
+      nodesToReplace.push(node);
+    }
+  }
+  
+  const map = { 'amp': '&', 'lt': '<', 'gt': '>', 'quot': '"', 'apos': "'", 'nbsp': ' ', 'rsquo': "'", 'lsquo': "'", 'ldquo': '"', 'rdquo': '"' };
+  
+  nodesToReplace.forEach(textNode => {
+    let text = textNode.textContent;
+    text = text.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code));
+    text = text.replace(/&([a-z]+);/g, (_, ent) => map[ent] || '&' + ent + ';');
+    textNode.textContent = text;
+  });
 }
 
 // ── GETTERS ──────────────────────────────────────────────
