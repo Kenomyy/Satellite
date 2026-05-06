@@ -181,7 +181,13 @@ export function togglePreview() {
 
 function renderMarkdown(content) {
   const withoutFrontmatter = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
-  return marked.parse(withoutFrontmatter);
+  const html = marked.parse(withoutFrontmatter);
+  // Décoder les entités HTML pour éviter &#39; etc.
+  return html.replace(/&(#\d+|[a-zA-Z]+);/g, (match) => {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = match;
+    return textarea.value;
+  });
 }
 
 function updateDirtyState() {

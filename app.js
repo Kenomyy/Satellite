@@ -101,6 +101,7 @@ function showApp() {
   setupSync();
   setupFileOps();
   setupSettings();
+  setupExportImport();
   applyAccentColor(state.settings.accentColor || '#E8E8F0');
 }
 
@@ -761,6 +762,74 @@ function updateBreadcrumb(path) {
 
 function applyAccentColor(color) {
   document.documentElement.style.setProperty('--accent', color);
+}
+
+// ─── EXPORT/IMPORT ───────────────────────────────────────
+
+function setupExportImport() {
+  document.getElementById('btn-export')?.addEventListener('click', exportVault);
+  document.getElementById('btn-import')?.addEventListener('click', () => {
+    document.getElementById('import-file').click();
+  });
+  document.getElementById('import-file')?.addEventListener('change', importVault);
+}
+
+async function exportVault() {
+  const zip = new JSZip();
+  const files = Explorer.flatFiles(state.tree).filter(f => f.path.endsWith('.md'));
+
+  for (const file of files) {
+    const cached = state.fileCache.get(file.path);
+    if (cached) {
+      zip.file(file.path, cached.content);
+    } else {
+      try {
+        const { content } = await GitHub.fetchFile(file.path);
+        zip.file(file.path, content);
+      } catch (err) {
+        console.error('Export failed for', file.path, err);
+      }
+    }
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'vault.zip';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function importVault(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const zip = await JSZip.loadAsync(file);
+  const files = [];
+
+  zip.forEach((path, file) => {
+    if (path.endsWith('.md')) {
+      files.push({ path, content: file.async('string') });
+    }
+  });
+
+  const resolvedFiles = await Promise.all(files.map(async ({ path, content }) => ({
+    path,
+    content: await content,
+  })));
+
+  // Push les fichiers importés
+  for (const { path, content } of resolvedFiles) {
+    try {
+      await GitHub.writeFile(path, content, null, 'Import file');
+    } catch (err) {
+      console.error('Import failed for', path, err);
+    }
+  }
+
+  await refreshTree();
+  setSyncStatus('ok', 'Imported');
 }
 
 // ─── PERSISTENCE ─────────────────────────────────────────

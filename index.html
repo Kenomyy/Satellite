@@ -42,10 +42,10 @@
       <div class="sidebar-header">
         <span class="app-name">SATELLITE</span>
         <div class="sidebar-actions">
-          <button class="icon-btn" id="btn-new-file" title="New file">
+          <button class="icon-btn" id="btn-new-file" title="New file" aria-label="Créer un nouveau fichier">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg>
           </button>
-          <button class="icon-btn" id="btn-new-folder" title="New folder">
+          <button class="icon-btn" id="btn-new-folder" title="New folder" aria-label="Créer un nouveau dossier">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4.5A1.5 1.5 0 013.5 3h3l1.5 1.5H12.5A1.5 1.5 0 0114 6v5.5A1.5 1.5 0 0112.5 13h-9A1.5 1.5 0 012 11.5v-7z"/></svg>
           </button>
 
@@ -84,7 +84,7 @@
     </aside>
 
     <!-- MAIN CONTENT -->
-    <main class="main">
+    <main class="main" role="main">
 
       <!-- TOP BAR -->
       <div class="topbar">
@@ -96,17 +96,26 @@
             <span class="sync-dot"></span>
             <span id="sync-label" class="sync-label">—</span>
           </div>
-          <button class="btn-mono" id="btn-pull">PULL</button>
-          <button class="btn-mono" id="btn-push">PUSH</button>
-          <button class="icon-btn" id="btn-graph" title="Open graph view">
+          <button class="btn-mono" id="btn-pull" aria-label="Tirer les changements">PULL</button>
+          <button class="btn-mono" id="btn-push" aria-label="Pousser les changements">PUSH</button>
+          <button class="icon-btn" id="btn-graph" title="Open graph view" aria-label="Ouvrir la vue graphe">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2"/><circle cx="2" cy="4" r="1.5"/><circle cx="14" cy="4" r="1.5"/><circle cx="2" cy="12" r="1.5"/><circle cx="14" cy="12" r="1.5"/><line x1="3.5" y1="4.5" x2="6.5" y2="7"/><line x1="12.5" y1="4.5" x2="9.5" y2="7"/><line x1="3.5" y1="11.5" x2="6.5" y2="9"/><line x1="12.5" y1="11.5" x2="9.5" y2="9"/></svg>
           </button>
-          <button class="icon-btn" id="btn-settings" title="Settings">
+          <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Paramètres">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-export" title="Export vault" aria-label="Exporter le vault">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 12l-4-4h3V4h2v4h3l-4 4z"/><path d="M2 14h12v-2H2v2z"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-import" title="Import vault" aria-label="Importer un vault">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 4l4 4h-3v4H7V8H4l4-4z"/><path d="M2 2h12v2H2V2z"/></svg>
           </button>
 
         </div>
       </div>
+
+      <!-- HIDDEN IMPORT INPUT -->
+      <input type="file" id="import-file" accept=".zip" style="display:none">
 
       <!-- LAYOUT ENGINE -->
       <div id="layout-root" class="layout-root"></div>
@@ -221,6 +230,7 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
